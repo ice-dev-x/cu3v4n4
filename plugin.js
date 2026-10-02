@@ -110,15 +110,19 @@ export async function episodes(ref) {
   if (!res.ok) throw new Error("No se pudo obtener la serie");
   const html = await res.text();
 
-  // 1. Extraemos la Sinopsis
-  const descMatch = html.match(/<div[^>]*class="(?:Description|Synopsis|info-desc)"[^>]*>([\s\S]*?)<\/div>/i) ||
-                    html.match(/<p[^>]*class="[^"]*desc[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+  // 1. Extracción de Sinopsis (Más agresiva)
+  // Busca el contenedor Description, o simplemente el primer párrafo largo si todo falla
+  const descMatch = html.match(/class="[^"]*(?:Description|Synopsis|info-desc)[^"]*">([\s\S]*?)<\/div>/i);
   let overview = "";
   if (descMatch) {
     overview = cleanText(descMatch[1]);
+  } else {
+    // Fallback: buscar un <p> que parezca una descripción (más de 50 letras)
+    const pMatches = html.match(/<p>([^<]{50,})<\/p>/i);
+    if (pMatches) overview = cleanText(pMatches[1]);
   }
 
-  // 2. Extraemos las Temporadas
+  // 2. Extraemos las Temporadas (Para las series, esto queda igual)
   const seasonRegex = /<a[^>]+href="([^"]+\/temporada-\d+)"/gi;
   const seasonLinks = [];
   let sMatch;
@@ -170,27 +174,27 @@ export async function episodes(ref) {
     }
   }
 
-  // 3. Manejo de Películas: Idiomas y Servidores
+  // 3. Manejo de Películas: Idiomas y Servidores (Blindado)
   if (episodesList.length === 0) {
     let count = 1;
+    let foundServers = false;
 
-    // Extraemos los nombres de las pestañas de idiomas
-    const langRegex = /<li[^>]*data-target="#([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
+    // Extraemos los nombres de las pestañas de idiomas (soporta href o data-target)
+    const langRegex = /<li[^>]*(?:data-target|href)="[^"]*?(Option\d+)[^"]*"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
     const langs = {};
     let lMatch;
     while ((lMatch = langRegex.exec(html)) !== null) {
-      langs[lMatch[1]] = cleanText(lMatch[2]); 
+      langs[lMatch[1]] = cleanText(lMatch[2]); // Ej: { "Option1": "Latino" }
     }
 
-    // Extraemos los contenedores de video por idioma
-    const containerRegex = /<div[^>]*id="([^"]+)"[^>]*class="[^"]*TPlayerTb[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
-    let cMatch;
-    let foundServers = false;
-
-    while ((cMatch = containerRegex.exec(html)) !== null) {
-      const containerId = cMatch[1];
-      const containerHtml = cMatch[2];
-      const langName = langs[containerId] || "Opción"; 
+    // Dividimos el HTML en pedazos basándonos en los contenedores "Option1", "Option2", etc.
+    const chunks = html.split(/id="(Option\d+)"/i);
+    
+    // Iteramos por los pedazos (chunks). chunk[1] es "Option1", chunk[2] es su contenido HTML
+    for (let i = 1; i < chunks.length; i += 2) {
+      const containerId = chunks[i];
+      const containerHtml = chunks[i + 1];
+      const langName = langs[containerId] || "Opción";
 
       const serverRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
       let serverMatch;
@@ -216,7 +220,7 @@ export async function episodes(ref) {
       }
     }
 
-    // Fallback general por si el diseño de la página cambia
+    // Fallback absoluto de seguridad
     if (!foundServers) {
       const fallbackRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
       let fMatch;
@@ -232,6 +236,7 @@ export async function episodes(ref) {
       }
     }
 
+    // Si de verdad no hay nada
     if (episodesList.length === 0) {
       episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
     }
@@ -240,7 +245,9 @@ export async function episodes(ref) {
   episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
   
   const result = { episodes: episodesList };
-  if (overview && overview.length > 5) {
+  
+  // Agregamos la sinopsis si se encontró
+  if (overview && overview.length > 10) {
     result.series = { overview: overview };
   }
   
