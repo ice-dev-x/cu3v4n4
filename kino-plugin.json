@@ -1,13 +1,12 @@
 {
   "id": "cu3v4n43e",
   "name": "cu3v4n43e",
-  "version": "1.2.0",
-  "apiVersion": 3,
+  "version": "1.3.0",
+  "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
   "description": "Películas y series en español",
   "author": "ice-dev-x",
- 
   "hosts": [
     "cuevana3e.pro",
     "*.cuevana3e.pro",
@@ -33,6 +32,21 @@
     "home",
     "episodes",
     "resolve"
+  ],
+  "settings": [
+    {
+      "key": "servidor_pref",
+      "label": "Servidor preferido (Series)",
+      "type": "select",
+      "default": "cualquiera",
+      "options": [
+        { "value": "cualquiera", "label": "Automático (Cualquiera disponible)" },
+        { "value": "2", "label": "Filemoon" },
+        { "value": "4", "label": "Doodstream" },
+        { "value": "1", "label": "Opción 1 (Hyper/Goldmember)" },
+        { "value": "3", "label": "Opción 3 (Nebula/Trinity)" }
+      ]
+    }
   ],
   "color": "#035453"
 }
