@@ -110,19 +110,15 @@ export async function episodes(ref) {
   if (!res.ok) throw new Error("No se pudo obtener la serie");
   const html = await res.text();
 
-  // 1. Extracción de Sinopsis (Más agresiva)
-  // Busca el contenedor Description, o simplemente el primer párrafo largo si todo falla
-  const descMatch = html.match(/class="[^"]*(?:Description|Synopsis|info-desc)[^"]*">([\s\S]*?)<\/div>/i);
+  // 1. Extraemos la Sinopsis
+  const descMatch = html.match(/<div[^>]*class="(?:Description|Synopsis|info-desc)"[^>]*>([\s\S]*?)<\/div>/i) ||
+                    html.match(/<p[^>]*class="[^"]*desc[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
   let overview = "";
   if (descMatch) {
     overview = cleanText(descMatch[1]);
-  } else {
-    // Fallback: buscar un <p> que parezca una descripción (más de 50 letras)
-    const pMatches = html.match(/<p>([^<]{50,})<\/p>/i);
-    if (pMatches) overview = cleanText(pMatches[1]);
   }
 
-  // 2. Extraemos las Temporadas (Para las series, esto queda igual)
+  // 2. Extraemos las Temporadas
   const seasonRegex = /<a[^>]+href="([^"]+\/temporada-\d+)"/gi;
   const seasonLinks = [];
   let sMatch;
@@ -174,27 +170,27 @@ export async function episodes(ref) {
     }
   }
 
-  // 3. Manejo de Películas: Idiomas y Servidores (Blindado)
+  // 3. Manejo de Películas: Idiomas y Servidores
   if (episodesList.length === 0) {
     let count = 1;
-    let foundServers = false;
 
-    // Extraemos los nombres de las pestañas de idiomas (soporta href o data-target)
-    const langRegex = /<li[^>]*(?:data-target|href)="[^"]*?(Option\d+)[^"]*"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
+    // Extraemos los nombres de las pestañas de idiomas
+    const langRegex = /<li[^>]*data-target="#([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
     const langs = {};
     let lMatch;
     while ((lMatch = langRegex.exec(html)) !== null) {
-      langs[lMatch[1]] = cleanText(lMatch[2]); // Ej: { "Option1": "Latino" }
+      langs[lMatch[1]] = cleanText(lMatch[2]); 
     }
 
-    // Dividimos el HTML en pedazos basándonos en los contenedores "Option1", "Option2", etc.
-    const chunks = html.split(/id="(Option\d+)"/i);
-    
-    // Iteramos por los pedazos (chunks). chunk[1] es "Option1", chunk[2] es su contenido HTML
-    for (let i = 1; i < chunks.length; i += 2) {
-      const containerId = chunks[i];
-      const containerHtml = chunks[i + 1];
-      const langName = langs[containerId] || "Opción";
+    // Extraemos los contenedores de video por idioma
+    const containerRegex = /<div[^>]*id="([^"]+)"[^>]*class="[^"]*TPlayerTb[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+    let cMatch;
+    let foundServers = false;
+
+    while ((cMatch = containerRegex.exec(html)) !== null) {
+      const containerId = cMatch[1];
+      const containerHtml = cMatch[2];
+      const langName = langs[containerId] || "Opción"; 
 
       const serverRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
       let serverMatch;
@@ -220,7 +216,7 @@ export async function episodes(ref) {
       }
     }
 
-    // Fallback absoluto de seguridad
+    // Fallback general por si el diseño de la página cambia
     if (!foundServers) {
       const fallbackRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
       let fMatch;
@@ -236,7 +232,6 @@ export async function episodes(ref) {
       }
     }
 
-    // Si de verdad no hay nada
     if (episodesList.length === 0) {
       episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
     }
@@ -245,9 +240,7 @@ export async function episodes(ref) {
   episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
   
   const result = { episodes: episodesList };
-  
-  // Agregamos la sinopsis si se encontró
-  if (overview && overview.length > 10) {
+  if (overview && overview.length > 5) {
     result.series = { overview: overview };
   }
   
@@ -283,23 +276,88 @@ export async function resolve(ref) {
       if (url.startsWith("//")) url = "https:" + url;
       cuevanaWrappers.push(url);
     } else {
-      const serverRegex = /data-server="([^"]+)"/g;
-      const servers = [];
-      let match;
-      while ((match = serverRegex.exec(html1)) !== null) servers.push(match[1]);
+      // --- NUEVA LÓGICA PARA SERIES: IDIOMAS + SERVIDOR ---
+      
+      // 1. Identificamos los idiomas disponibles en la página
+      const langRegex = /<li[^>]*data-target="#([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
+      const langs = {};
+      let lMatch;
+      while ((lMatch = langRegex.exec(html1)) !== null) {
+        langs[lMatch[1]] = cleanText(lMatch[2]).toLowerCase(); // Ej: "latino", "subtitulado"
+      }
 
-      for (const s of servers) {
-        let url = s;
-        if (s.includes("?v=")) {
-          try { url = base64Decode(s.split("?v=")[1]); } catch(e) {}
+      // 2. Extraemos los servidores y los etiquetamos con su respectivo idioma
+      const containerRegex = /<div[^>]*id="([^"]+)"[^>]*class="[^"]*TPlayerTb[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+      let cMatch;
+      let foundContainers = false;
+      const serversByLang = [];
+
+      while ((cMatch = containerRegex.exec(html1)) !== null) {
+        foundContainers = true;
+        const containerId = cMatch[1];
+        const containerHtml = cMatch[2];
+        const langName = langs[containerId] || "latino"; // Fallback a latino
+
+        const serverRegex = /<li[^>]*data-server="([^"]+)"/gi;
+        let sMatch;
+        while ((sMatch = serverRegex.exec(containerHtml)) !== null) {
+          serversByLang.push({ lang: langName, url: sMatch[1] });
+        }
+      }
+
+      // Fallback por si la estructura cambia (atrapa todo como latino)
+      if (!foundContainers) {
+        const fallbackRegex = /data-server="([^"]+)"/g;
+        let match;
+        while ((match = fallbackRegex.exec(html1)) !== null) {
+          serversByLang.push({ lang: "latino", url: match[1] });
+        }
+      }
+
+      // 3. Leemos la configuración del televisor
+      const idiomaPref = (kino.config && kino.config.get) ? kino.config.get("idioma_pref") : "latino";
+      const serverPref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "1";
+
+      const serversList = [];
+      for (const item of serversByLang) {
+        let url = item.url;
+        if (url.includes("?v=")) {
+          try { url = base64Decode(url.split("?v=")[1]); } catch(e) {}
         }
         if (url.startsWith("//")) url = "https:" + url;
-        if (url.includes("tungtungsahur")) cuevanaWrappers.push(url);
+        if (!url.includes("tungtungsahur")) continue;
+
+        const tokenMatch = url.match(/token=([^&]+)/);
+        const sIndex = tokenMatch ? tokenMatch[1][0] : null;
+
+        serversList.push({ lang: item.lang, url: url, sIndex: sIndex });
+      }
+
+      // 4. ORDENAMOS LA LISTA: Primero por Idioma, Segundo por Servidor
+      serversList.sort((a, b) => {
+        // Criterio 1: Idioma
+        const aIsLang = a.lang.includes(idiomaPref) ? 1 : 0;
+        const bIsLang = b.lang.includes(idiomaPref) ? 1 : 0;
+        if (aIsLang !== bIsLang) return bIsLang - aIsLang; // El idioma preferido sube al inicio
+
+        // Criterio 2: Servidor (si el idioma es el mismo)
+        if (serverPref !== "cualquiera") {
+          const aIsServer = a.sIndex === serverPref ? 1 : 0;
+          const bIsServer = b.sIndex === serverPref ? 1 : 0;
+          if (aIsServer !== bIsServer) return bIsServer - aIsServer; // El servidor preferido sube
+        }
+        return 0;
+      });
+
+      // 5. Inyectamos las URLs ordenadas para el desencriptado
+      for (const s of serversList) {
+        cuevanaWrappers.push(s.url);
       }
     }
 
     if (cuevanaWrappers.length === 0) throw new Error("No hay servidores disponibles");
-
+    
+    // A partir de aquí sigue tu bucle "for (const url of cuevanaWrappers) { try { ..."
     // Aplicar la preferencia del usuario para Series (o como respaldo)
     const pref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "cualquiera";
     if (pref && pref !== "cualquiera") {
