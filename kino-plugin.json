@@ -1,7 +1,7 @@
 {
   "id": "cu3v4n43e",
   "name": "cuevana",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
