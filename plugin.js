@@ -1,4 +1,4 @@
-const BASE_URL = "https://cuevana3e.pro";
+const BASE_URL = "https://cuevana3k.pro";
 
 function cleanText(text) {
   if (!text) return "";
