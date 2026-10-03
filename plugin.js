@@ -354,14 +354,19 @@ export async function resolve(ref) {
                 unpackedCode.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
                 unpackedCode.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
 
-              if (streamFinal) {
-                return {
-                  url: streamFinal[1] || streamFinal[0],
-                  headers: {
-                    "Referer": iframeUrl,
-                    "Origin": originUrl,
-                    "User-Agent": "Mozilla/5.0",
-                    "Accept": "*/*"
+             if (streamFinal) {
+          let streamUrl = streamFinal[1] || streamFinal[0];
+          if (streamUrl.includes(',l,n,h,.urlset/master.m3u8')) {
+            streamUrl = streamUrl.replace(',l,n,h,.urlset/master.m3u8', 'h/index.m3u8');
+          }
+          return {
+            url: streamUrl,
+            headers: {
+              "Referer": iframeUrl,
+              "Origin": originUrl,
+              "User-Agent": "Mozilla/5.0",
+              "Accept": "*/*"
+    
                   }
                 };
               }
@@ -372,8 +377,12 @@ export async function resolve(ref) {
               html3.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
 
             if (streamFinal) {
+              let streamUrl = streamFinal[1] || streamFinal[0];
+    if (streamUrl.includes(',l,n,h,.urlset/master.m3u8')) {
+      streamUrl = streamUrl.replace(',l,n,h,.urlset/master.m3u8', 'h/index.m3u8');
+    }
               return {
-                url: streamFinal[1] || streamFinal[0],
+                url: streamurl,
                 headers: { "Referer": iframeUrl }
               };
             }
