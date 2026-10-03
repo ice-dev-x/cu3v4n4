@@ -31,6 +31,11 @@ function base64Decode(str) {
   }
 }
 
+function extractTmdbId(url) {
+  const m = url.match(/\/(?:pelicula|serie)\/(\d+)\//);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 export async function home() {
   const res = await kino.fetch(`${BASE_URL}/`, { headers: { "User-Agent": "Mozilla/5.0" } });
   if (!res.ok) return [];
@@ -39,33 +44,34 @@ export async function home() {
   const vistos = new Set();
   const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   let match;
-  
+
   while ((match = aRegex.exec(html)) !== null && items.length < 40) {
     let link = match[1];
     if (link.includes("episodio")) continue;
     const innerHtml = match[2];
-    
     const imgMatch = innerHtml.match(/(?:src|data-src|data-lazy)=(?:"([^"]+)"|([^ >]+))/i);
     const titleMatch = innerHtml.match(/<h2[^>]*>([^<]+)<\/h2>/i) || innerHtml.match(/alt="([^"]+)"/i);
     const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
-    
     if (imgMatch && titleMatch && !vistos.has(link)) {
       vistos.add(link);
       let poster = imgMatch[1] || imgMatch[2];
       if (poster.startsWith("//")) poster = "https:" + poster;
       if (poster.startsWith("/")) poster = BASE_URL + poster;
+      const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
+      const tmdbId = extractTmdbId(fullLink);
       const item = {
         id: link.replace(BASE_URL, "").replace(/[^a-zA-Z0-9_-]/g, "") || ("item-" + items.length),
-        ref: link.startsWith("http") ? link : `${BASE_URL}${link}`,
+        ref: fullLink,
         title: cleanText(titleMatch[1] || titleMatch[2]),
         kind: link.includes("/serie/") ? "series" : "movie",
         poster: poster
       };
       if (yearMatch) item.year = parseInt(yearMatch[1], 10);
+      if (tmdbId) item.ids = { tmdb: tmdbId };
       items.push(item);
     }
   }
-  return [{ id: "recientes", title: "Recientes en Cuevana", items: items }];
+  return [{ id: "recientes", title: "Recientes en Cuevana", items }];
 }
 
 export async function search(query) {
@@ -77,28 +83,29 @@ export async function search(query) {
   const vistos = new Set();
   const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   let match;
-  
+
   while ((match = aRegex.exec(html)) !== null && results.length < 50) {
     let link = match[1];
     if (link.includes("episodio")) continue;
     const innerHtml = match[2];
-    
-    const imgMatch = innerHtml.match(/(?:src|data-src|data-lazy)=(?:"([^"]+)"|([^ >]+))/i);
+    const imgMatch = innerHtml.match(/src=(?:"([^"]+)"|([^ >]+))/i);
     const titleMatch = innerHtml.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i) || innerHtml.match(/alt="([^"]+)"/i);
     const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
-    
     if (imgMatch && titleMatch && !vistos.has(link)) {
       vistos.add(link);
       let poster = imgMatch[1] || imgMatch[2];
       if (poster.startsWith("//")) poster = "https:" + poster;
+      const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
+      const tmdbId = extractTmdbId(fullLink);
       const item = {
         id: link.replace(BASE_URL, "").replace(/[^a-zA-Z0-9_-]/g, "") || ("search-" + results.length),
-        ref: link.startsWith("http") ? link : `${BASE_URL}${link}`,
+        ref: fullLink,
         title: cleanText(titleMatch[1] || titleMatch[2]),
         kind: link.includes("/serie/") ? "series" : "movie",
         poster: poster
       };
       if (yearMatch) item.year = parseInt(yearMatch[1], 10);
+      if (tmdbId) item.ids = { tmdb: tmdbId };
       results.push(item);
     }
   }
@@ -110,15 +117,11 @@ export async function episodes(ref) {
   if (!res.ok) throw new Error("No se pudo obtener la serie");
   const html = await res.text();
 
-  // 1. Extraemos la Sinopsis
-  const descMatch = html.match(/<div[^>]*class="(?:Description|Synopsis|info-desc)"[^>]*>([\s\S]*?)<\/div>/i) ||
-                    html.match(/<p[^>]*class="[^"]*desc[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
-  let overview = "";
-  if (descMatch) {
-    overview = cleanText(descMatch[1]);
-  }
+  const descMatch = html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
+  const overview = descMatch ? cleanText(descMatch[1]) : "";
 
-  // 2. Extraemos las Temporadas
+  const tmdbId = extractTmdbId(ref);
+
   const seasonRegex = /<a[^>]+href="([^"]+\/temporada-\d+)"/gi;
   const seasonLinks = [];
   let sMatch;
@@ -170,58 +173,49 @@ export async function episodes(ref) {
     }
   }
 
-  // 3. Manejo de Películas: Idiomas y Servidores
   if (episodesList.length === 0) {
     let count = 1;
-
-    // Extraemos los nombres de las pestañas de idiomas
-    const langRegex = /<li[^>]*data-target="#([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
-    const langs = {};
-    let lMatch;
-    while ((lMatch = langRegex.exec(html)) !== null) {
-      langs[lMatch[1]] = cleanText(lMatch[2]); 
-    }
-
-    // Extraemos los contenedores de video por idioma
-    const containerRegex = /<div[^>]*id="([^"]+)"[^>]*class="[^"]*TPlayerTb[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
-    let cMatch;
+    const urlsVistas = new Set();
     let foundServers = false;
 
+    const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
+    let cMatch;
+
     while ((cMatch = containerRegex.exec(html)) !== null) {
-      const containerId = cMatch[1];
-      const containerHtml = cMatch[2];
-      const langName = langs[containerId] || "Opción"; 
+      const langName = cleanText(cMatch[2]);
+      const serversHtml = cMatch[3];
 
       const serverRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
       let serverMatch;
-      
-      while ((serverMatch = serverRegex.exec(containerHtml)) !== null) {
+
+      while ((serverMatch = serverRegex.exec(serversHtml)) !== null) {
+        const serverUrl = serverMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
         foundServers = true;
-        let serverUrl = serverMatch[1];
+
         const rawInner = serverMatch[2];
-        const nameMatch = rawInner.match(/<span[^>]*>([^<]+)<\/span>/i) ||
-                          rawInner.match(/<strong[^>]*>([^<]+)<\/strong>/i) ||
-                          rawInner.match(/<[^>]+>([^<]+)<\/[^>]+>/i);
-                          
-        let serverName = nameMatch ? cleanText(nameMatch[1]) : cleanText(rawInner.replace(/<[^>]+>/g, ' ').trim());
+        const nameMatch = rawInner.match(/<span[^>]*>([^<]+)<\/span>/i);
+        let serverName = nameMatch ? cleanText(nameMatch[1]) : `Servidor ${count}`;
         if (!serverName || serverName.length < 2) serverName = `Servidor ${count}`;
 
         episodesList.push({
           season: 1,
           number: count,
           ref: `${ref}|||${serverUrl}`,
-          title: `${langName} - ${serverName}` 
+          title: `${langName} - ${serverName}`
         });
         count++;
       }
     }
 
-    // Fallback general por si el diseño de la página cambia
     if (!foundServers) {
       const fallbackRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
       let fMatch;
       while ((fMatch = fallbackRegex.exec(html)) !== null) {
-        let serverUrl = fMatch[1];
+        const serverUrl = fMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
         episodesList.push({
           season: 1,
           number: count,
@@ -238,12 +232,13 @@ export async function episodes(ref) {
   }
 
   episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
-  
+
   const result = { episodes: episodesList };
-  if (overview && overview.length > 5) {
-    result.series = { overview: overview };
-  }
-  
+  const seriesInfo = {};
+  if (overview) seriesInfo.overview = overview;
+  if (tmdbId) seriesInfo.ids = { tmdb: tmdbId };
+  if (Object.keys(seriesInfo).length > 0) result.series = seriesInfo;
+
   return result;
 }
 
@@ -276,90 +271,24 @@ export async function resolve(ref) {
       if (url.startsWith("//")) url = "https:" + url;
       cuevanaWrappers.push(url);
     } else {
-      // --- NUEVA LÓGICA PARA SERIES: IDIOMAS + SERVIDOR ---
-      
-      // 1. Identificamos los idiomas disponibles en la página
-      const langRegex = /<li[^>]*data-target="#([^"]+)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/gi;
-      const langs = {};
-      let lMatch;
-      while ((lMatch = langRegex.exec(html1)) !== null) {
-        langs[lMatch[1]] = cleanText(lMatch[2]).toLowerCase(); // Ej: "latino", "subtitulado"
-      }
+      const serverRegex = /data-server="([^"]+)"/g;
+      const servers = [];
+      let match;
+      while ((match = serverRegex.exec(html1)) !== null) servers.push(match[1]);
 
-      // 2. Extraemos los servidores y los etiquetamos con su respectivo idioma
-      const containerRegex = /<div[^>]*id="([^"]+)"[^>]*class="[^"]*TPlayerTb[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
-      let cMatch;
-      let foundContainers = false;
-      const serversByLang = [];
-
-      while ((cMatch = containerRegex.exec(html1)) !== null) {
-        foundContainers = true;
-        const containerId = cMatch[1];
-        const containerHtml = cMatch[2];
-        const langName = langs[containerId] || "latino"; // Fallback a latino
-
-        const serverRegex = /<li[^>]*data-server="([^"]+)"/gi;
-        let sMatch;
-        while ((sMatch = serverRegex.exec(containerHtml)) !== null) {
-          serversByLang.push({ lang: langName, url: sMatch[1] });
-        }
-      }
-
-      // Fallback por si la estructura cambia (atrapa todo como latino)
-      if (!foundContainers) {
-        const fallbackRegex = /data-server="([^"]+)"/g;
-        let match;
-        while ((match = fallbackRegex.exec(html1)) !== null) {
-          serversByLang.push({ lang: "latino", url: match[1] });
-        }
-      }
-
-      // 3. Leemos la configuración del televisor
-      const idiomaPref = (kino.config && kino.config.get) ? kino.config.get("idioma_pref") : "latino";
-      const serverPref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "1";
-
-      const serversList = [];
-      for (const item of serversByLang) {
-        let url = item.url;
-        if (url.includes("?v=")) {
-          try { url = base64Decode(url.split("?v=")[1]); } catch(e) {}
+      for (const s of servers) {
+        let url = s;
+        if (s.includes("?v=")) {
+          try { url = base64Decode(s.split("?v=")[1]); } catch(e) {}
         }
         if (url.startsWith("//")) url = "https:" + url;
-        if (!url.includes("tungtungsahur")) continue;
-
-        const tokenMatch = url.match(/token=([^&]+)/);
-        const sIndex = tokenMatch ? tokenMatch[1][0] : null;
-
-        serversList.push({ lang: item.lang, url: url, sIndex: sIndex });
-      }
-
-      // 4. ORDENAMOS LA LISTA: Primero por Idioma, Segundo por Servidor
-      serversList.sort((a, b) => {
-        // Criterio 1: Idioma
-        const aIsLang = a.lang.includes(idiomaPref) ? 1 : 0;
-        const bIsLang = b.lang.includes(idiomaPref) ? 1 : 0;
-        if (aIsLang !== bIsLang) return bIsLang - aIsLang; // El idioma preferido sube al inicio
-
-        // Criterio 2: Servidor (si el idioma es el mismo)
-        if (serverPref !== "cualquiera") {
-          const aIsServer = a.sIndex === serverPref ? 1 : 0;
-          const bIsServer = b.sIndex === serverPref ? 1 : 0;
-          if (aIsServer !== bIsServer) return bIsServer - aIsServer; // El servidor preferido sube
-        }
-        return 0;
-      });
-
-      // 5. Inyectamos las URLs ordenadas para el desencriptado
-      for (const s of serversList) {
-        cuevanaWrappers.push(s.url);
+        if (url.includes("tungtungsahur")) cuevanaWrappers.push(url);
       }
     }
 
     if (cuevanaWrappers.length === 0) throw new Error("No hay servidores disponibles");
-    
-    // A partir de aquí sigue tu bucle "for (const url of cuevanaWrappers) { try { ..."
-    // Aplicar la preferencia del usuario para Series (o como respaldo)
-    const pref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "cualquiera";
+
+    const pref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "1";
     if (pref && pref !== "cualquiera") {
       cuevanaWrappers.sort((a, b) => {
         const tokenA = a.match(/token=([^&]+)/);

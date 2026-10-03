@@ -1,12 +1,13 @@
 {
   "id": "cu3v4n43e",
   "name": "cu3v4n43e",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
   "description": "Películas y series en español",
   "author": "ice-dev-x",
+  "streamHosts": "any",
   "hosts": [
     "cuevana3e.pro",
     "*.cuevana3e.pro",
@@ -34,31 +35,18 @@
     "resolve"
   ],
   "settings": [
-    {
-      "key": "idioma_pref",
-      "label": "Idioma preferido (Series)",
-      "type": "select",
-      "default": "latino",
-      "options": [
-        { "value": "latino", "label": "Latino" },
-        { "value": "subtitulado", "label": "Subtitulado" },
-        { "value": "castellano", "label": "Castellano" },
-        { "value": "multilenguaje", "label": "Multilenguaje (Inglés/Original)" }
-      ]
-    },
-    {
-      "key": "servidor_pref",
-      "label": "Servidor preferido (Series)",
-      "type": "select",
-      "default": "1",
-      "options": [
-        { "value": "1", "label": "Opción 1 (Hyper/Goldmember)" },
-        { "value": "3", "label": "Opción 3 (Nebula/Trinity)" },
-        { "value": "2", "label": "Filemoon / Death Star" },
-        { "value": "4", "label": "Doodstream / Mahoutokoro" },
-        { "value": "cualquiera", "label": "Automático (El primero que funcione)" }
-      ]
-    }
-  ],
-  "color": "#035453"
+  {
+    "key": "servidor_pref",
+    "label": "Servidor preferido (Series)",
+    "type": "select",
+    "default": "1",
+    "options": [
+      { "value": "1", "label": "Latino (Hyper/Goldmember)" },
+      { "value": "3", "label": "Inglés (Nebula/Trinity)" },
+      { "value": "2", "label": "Filemoon" },
+      { "value": "4", "label": "Doodstream" },
+      { "value": "cualquiera", "label": "Automático (Cualquiera disponible)" }
+    ]
+  }
+]
 }
