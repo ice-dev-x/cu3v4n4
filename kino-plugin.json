@@ -1,7 +1,7 @@
 {
   "id": "cu3v4n43e",
-  "name": "cuevana",
-  "version": "1.9.6",
+  "name": "cu3v4n43e",
+  "version": "1.3.0",
   "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -9,8 +9,8 @@
   "author": "ice-dev-x",
   "streamHosts": "any",
   "hosts": [
-    "cuevana3k.pro",
-    "*.cuevana3k.pro",
+    "cuevana3e.pro",
+    "*.cuevana3e.pro",
     "filemoon.sx",
     "*.filemoon.sx",
     "lkhjerbhye3wjkhodvh5xiczuvd.lol",
@@ -34,20 +34,20 @@
     "episodes",
     "resolve"
   ],
- "settings": [
-  {
-    "key": "servidor_pref",
-    "label": "Servidor preferido (Series)",
-    "type": "select",
-    "default": "1",
-    "options": [
-      { "value": "1", "label": "Latino (Hyper/Goldmember)" },
-      { "value": "3", "label": "Inglés (Nebula/Trinity)" },
-      { "value": "2", "label": "Filemoon" },
-      { "value": "4", "label": "Doodstream" },
-      { "value": "cualquiera", "label": "Automático (Cualquiera disponible)" }
+  "settings": [
+    {
+      "key": "servidor_pref",
+      "label": "Servidor preferido (Series)",
+      "type": "select",
+      "default": "cualquiera",
+      "options": [
+        { "value": "cualquiera", "label": "Automático (Cualquiera disponible)" },
+        { "value": "2", "label": "Filemoon" },
+        { "value": "4", "label": "Doodstream" },
+        { "value": "1", "label": "Opción 1 (Hyper/Goldmember)" },
+        { "value": "3", "label": "Opción 3 (Nebula/Trinity)" }
       ]
     }
   ],
-  "color": "#074f73"
+  "color": "#035453"
 }
