@@ -1,4 +1,4 @@
-const BASE_URL = "https://cuevana3k.pro";
+const BASE_URL = "https://cuevana3e.pro";
 
 function cleanText(text) {
   if (!text) return "";
@@ -34,13 +34,6 @@ function base64Decode(str) {
 function extractTmdbId(url) {
   const m = url.match(/\/(?:pelicula|serie)\/(\d+)\//);
   return m ? parseInt(m[1], 10) : null;
-}
-
-function getPrefs() {
-  const idioma = (kino.config && kino.config.get) ? (kino.config.get("idioma_pref") || "Latino") : "Latino";
-  const servidor = (kino.config && kino.config.get) ? (kino.config.get("servidor_pref") || "1") : "1";
-  const servidorNombre = servidor === "1" ? "Hyper" : servidor === "3" ? "Nebula" : null;
-  return { idioma, servidor, servidorNombre };
 }
 
 export async function home() {
@@ -126,6 +119,7 @@ export async function episodes(ref) {
 
   const descMatch = html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
   const overview = descMatch ? cleanText(descMatch[1]) : "";
+
   const tmdbId = extractTmdbId(ref);
 
   const seasonRegex = /<a[^>]+href="([^"]+\/temporada-\d+)"/gi;
@@ -180,13 +174,64 @@ export async function episodes(ref) {
   }
 
   if (episodesList.length === 0) {
-    // Si es una película, devolvemos un solo item limpio
-    episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
+    let count = 1;
+    const urlsVistas = new Set();
+    let foundServers = false;
+
+    const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
+    let cMatch;
+
+    while ((cMatch = containerRegex.exec(html)) !== null) {
+      const langName = cleanText(cMatch[2]);
+      const serversHtml = cMatch[3];
+
+      const serverRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
+      let serverMatch;
+
+      while ((serverMatch = serverRegex.exec(serversHtml)) !== null) {
+        const serverUrl = serverMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
+        foundServers = true;
+
+        const rawInner = serverMatch[2];
+        const nameMatch = rawInner.match(/<span[^>]*>([^<]+)<\/span>/i);
+        let serverName = nameMatch ? cleanText(nameMatch[1]) : `Servidor ${count}`;
+        if (!serverName || serverName.length < 2) serverName = `Servidor ${count}`;
+
+        episodesList.push({
+          season: 1,
+          number: count,
+          ref: `${ref}|||${serverUrl}`,
+          title: `${langName} - ${serverName}`
+        });
+        count++;
+      }
+    }
+
+    if (!foundServers) {
+      const fallbackRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
+      let fMatch;
+      while ((fMatch = fallbackRegex.exec(html)) !== null) {
+        const serverUrl = fMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
+        episodesList.push({
+          season: 1,
+          number: count,
+          ref: `${ref}|||${serverUrl}`,
+          title: `Opción ${count}`
+        });
+        count++;
+      }
+    }
+
+    if (episodesList.length === 0) {
+      episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
+    }
   }
 
-  if (seasonLinks.length > 0) {
-    episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
-  }
+  episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
 
   const result = { episodes: episodesList };
   const seriesInfo = {};
@@ -199,7 +244,16 @@ export async function episodes(ref) {
 
 export async function resolve(ref) {
   try {
-    const res1 = await kino.fetch(ref, { headers: { "User-Agent": "Mozilla/5.0" } });
+    let targetUrl = ref;
+    let selectedServer = null;
+
+    if (ref.includes("|||")) {
+      const parts = ref.split("|||");
+      targetUrl = parts[0];
+      selectedServer = parts[1];
+    }
+
+    const res1 = await kino.fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
     if (!res1.ok) throw new Error("Fallo al contactar el servidor principal");
     const html1 = await res1.text();
 
@@ -208,55 +262,45 @@ export async function resolve(ref) {
     if (keyMatch) dynamicKey = keyMatch[1];
 
     const cuevanaWrappers = [];
-    const { idioma, servidor } = getPrefs();
-    
-    // 1. Aislar el HTML del idioma preferido
-    let htmlToSearch = html1;
-    if (idioma !== "cualquiera") {
-      const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
-      let cMatch;
-      let languageTabs = [];
-      
-      while ((cMatch = containerRegex.exec(html1)) !== null) {
-        languageTabs.push({ langName: cleanText(cMatch[2]), html: cMatch[3] });
-      }
-      
-      const matchingTab = languageTabs.find(t => t.langName.includes(idioma));
-      if (matchingTab) htmlToSearch = matchingTab.html;
-    }
 
-    // 2. Extraer servidores SOLO del idioma seleccionado
-    const serverRegex = /data-server="([^"]+)"/g;
-    const servers = [];
-    let match;
-    while ((match = serverRegex.exec(htmlToSearch)) !== null) servers.push(match[1]);
-
-    // 3. Filtrar y ordenar priorizando el servidor configurado (Hyper = 1, Nebula = 3)
-    const allWrappers = [];
-    for (const s of servers) {
-      let url = s;
-      if (s.includes("?v=")) {
-        try { url = base64Decode(s.split("?v=")[1]); } catch(e) {}
+    if (selectedServer) {
+      let url = selectedServer;
+      if (url.includes("?v=")) {
+        try { url = base64Decode(url.split("?v=")[1]); } catch(e) {}
       }
       if (url.startsWith("//")) url = "https:" + url;
-      if (url.includes("tungtungsahur")) allWrappers.push(url);
+      cuevanaWrappers.push(url);
+    } else {
+      const serverRegex = /data-server="([^"]+)"/g;
+      const servers = [];
+      let match;
+      while ((match = serverRegex.exec(html1)) !== null) servers.push(match[1]);
+
+      for (const s of servers) {
+        let url = s;
+        if (s.includes("?v=")) {
+          try { url = base64Decode(s.split("?v=")[1]); } catch(e) {}
+        }
+        if (url.startsWith("//")) url = "https:" + url;
+        if (url.includes("tungtungsahur")) cuevanaWrappers.push(url);
+      }
     }
-
-    allWrappers.sort((a, b) => {
-      const tokenA = a.match(/token=([^&]+)/);
-      const tokenB = b.match(/token=([^&]+)/);
-      const indexA = tokenA ? tokenA[1][0] : null;
-      const indexB = tokenB ? tokenB[1][0] : null;
-      if (indexA === servidor && indexB !== servidor) return -1;
-      if (indexB === servidor && indexA !== servidor) return 1;
-      return 0;
-    });
-
-    cuevanaWrappers.push(...allWrappers);
 
     if (cuevanaWrappers.length === 0) throw new Error("No hay servidores disponibles");
 
-    // 4. Desencriptar y resolver el video
+    const pref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "1";
+    if (pref && pref !== "cualquiera") {
+      cuevanaWrappers.sort((a, b) => {
+        const tokenA = a.match(/token=([^&]+)/);
+        const tokenB = b.match(/token=([^&]+)/);
+        const indexA = tokenA ? tokenA[1][0] : null;
+        const indexB = tokenB ? tokenB[1][0] : null;
+        if (indexA === pref) return -1;
+        if (indexB === pref) return 1;
+        return 0;
+      });
+    }
+
     for (const url of cuevanaWrappers) {
       try {
         const tokenMatch = url.match(/token=([^&]+)/);
@@ -269,7 +313,8 @@ export async function resolve(ref) {
         const serversDict = {
           '1': 'https://lkhjerbhye3wjkhodvh5xiczuvd.lol/v/',
           '2': 'https://filemoon.sx/e/',
-          '3': 'https://lkhjerbhye3wjkhodvh5xlczuvd.lol/e/'
+          '3': 'https://lkhjerbhye3wjkhodvh5xlczuvd.lol/e/',
+          '4': 'https://dood.li/e/'
         };
 
         if (!serversDict[serverIndex]) continue;
@@ -301,26 +346,44 @@ export async function resolve(ref) {
               let unpackedCode = "";
               try {
                 unpackedCode = new Function("return (" + packerMatch[1] + ");")();
-              } catch (err) { continue; }
+              } catch (err) {
+                continue;
+              }
 
-              const streamFinal = unpackedCode.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) || unpackedCode.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+              const streamFinal =
+                unpackedCode.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
+                unpackedCode.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
 
               if (streamFinal) {
                 return {
                   url: streamFinal[1] || streamFinal[0],
-                  headers: { "Referer": iframeUrl, "Origin": originUrl, "User-Agent": "Mozilla/5.0", "Accept": "*/*" }
+                  headers: {
+                    "Referer": iframeUrl,
+                    "Origin": originUrl,
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "*/*"
+                  }
                 };
               }
             }
           } else {
-            const streamFinal = html3.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) || html3.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+            const streamFinal =
+              html3.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
+              html3.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+
             if (streamFinal) {
-              return { url: streamFinal[1] || streamFinal[0], headers: { "Referer": iframeUrl } };
+              return {
+                url: streamFinal[1] || streamFinal[0],
+                headers: { "Referer": iframeUrl }
+              };
             }
           }
         }
-      } catch (innerError) { continue; }
+      } catch (innerError) {
+        continue;
+      }
     }
+
     throw new Error("Se intentaron todos los servidores pero ninguno entregó el video.");
   } catch (e) {
     throw new Error(String(e));

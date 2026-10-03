@@ -1,7 +1,7 @@
 {
   "id": "cu3v4n43e",
   "name": "cuevana",
-  "version": "1.9.1",
+  "version": "1.9.5",
   "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -34,28 +34,18 @@
     "episodes",
     "resolve"
   ],
-  "settings": [
-    {
-      "key": "idioma_pref",
-      "label": "Idioma preferido",
-      "type": "select",
-      "default": "Latino",
-      "options": [
-        { "value": "Latino", "label": "🇲🇽 Latino" },
-        { "value": "Castellano", "label": "🇪🇸 Castellano" },
-        { "value": "Subtitulado", "label": "🇺🇸 Subtitulado" },
-        { "value": "cualquiera", "label": "Automático" }
-      ]
-    },
-    {
-      "key": "servidor_pref",
-      "label": "Servidor preferido",
-      "type": "select",
-      "default": "1",
-      "options": [
-        { "value": "1", "label": "Hyper (recomendado)" },
-        { "value": "3", "label": "Nebula" },
-        { "value": "cualquiera", "label": "Automático" }
+ "settings": [
+  {
+    "key": "servidor_pref",
+    "label": "Servidor preferido (Series)",
+    "type": "select",
+    "default": "1",
+    "options": [
+      { "value": "1", "label": "Latino (Hyper/Goldmember)" },
+      { "value": "3", "label": "Inglés (Nebula/Trinity)" },
+      { "value": "2", "label": "Filemoon" },
+      { "value": "4", "label": "Doodstream" },
+      { "value": "cualquiera", "label": "Automático (Cualquiera disponible)" }
       ]
     }
   ],
