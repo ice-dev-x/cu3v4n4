@@ -1,7 +1,7 @@
 {
-  "id": "cu3v4n43e",
-  "name": "cu3v4n43e",
-  "version": "1.3.0",
+  "id": "cuevana",
+  "name": "Cuevana",
+  "version": "2.0.0",
   "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -9,8 +9,8 @@
   "author": "ice-dev-x",
   "streamHosts": "any",
   "hosts": [
-    "cuevana3e.pro",
-    "*.cuevana3e.pro",
+    "cuevana3k.pro",
+    "*.cuevana3k.pro",
     "filemoon.sx",
     "*.filemoon.sx",
     "lkhjerbhye3wjkhodvh5xiczuvd.lol",
