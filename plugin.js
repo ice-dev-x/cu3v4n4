@@ -356,9 +356,9 @@ export async function resolve(ref) {
 
              if (streamFinal) {
           let streamUrl = streamFinal[1] || streamFinal[0];
-          if (streamUrl.includes(',l,n,h,.urlset/master.m3u8')) {
-            streamUrl = streamUrl.replace(',l,n,h,.urlset/master.m3u8', 'h/index.m3u8');
-          }
+          if (streamUrl.includes('.urlset/master.m3u8')) {
+  streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
+}
           return {
             url: streamUrl,
             headers: {
@@ -378,9 +378,9 @@ export async function resolve(ref) {
 
             if (streamFinal) {
               let streamUrl = streamFinal[1] || streamFinal[0];
-    if (streamUrl.includes(',l,n,h,.urlset/master.m3u8')) {
-      streamUrl = streamUrl.replace(',l,n,h,.urlset/master.m3u8', 'h/index.m3u8');
-    }
+    if (streamUrl.includes('.urlset/master.m3u8')) {
+  streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
+}
               return {
                 url: streamurl,
                 headers: { "Referer": iframeUrl }
