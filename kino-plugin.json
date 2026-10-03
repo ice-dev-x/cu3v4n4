@@ -41,12 +41,13 @@
     "type": "select",
     "default": "1",
     "options": [
-      { "value": "1", "label": "Latino (Hyper/Goldmember)" },
-      { "value": "3", "label": "Inglés (Nebula/Trinity)" },
+      { "value": "1", "label": "Opcion 1" },
+      { "value": "3", "label": "Opcion 2" },
       { "value": "2", "label": "Filemoon" },
       { "value": "4", "label": "Doodstream" },
       { "value": "cualquiera", "label": "Automático (Cualquiera disponible)" }
     ]
   }
-]
+],
+"color": "#074f73"
 }
