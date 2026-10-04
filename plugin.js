@@ -335,7 +335,7 @@ export async function resolve(ref) {
 
     if (cuevanaWrappers.length === 0) throw new Error("No hay servidores disponibles");
 
-    const pref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "1";
+    const pref = (kino.config && kino.config.get) ? kino.config.get("servidor_pref") : "3";
     if (pref && pref !== "cualquiera") {
       cuevanaWrappers.sort((a, b) => {
         const tokenA = a.match(/token=([^&]+)/);

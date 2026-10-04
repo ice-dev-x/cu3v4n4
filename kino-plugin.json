@@ -1,10 +1,10 @@
 {
-  "id": "cuevana1",
+  "id": "cuevana2",
   "name": "Cuevana",
   "version": "2.0.6",
   "apiVersion": 4,
   "entry": "plugin.js",
-  "icon": "icon-2.png",
+  "icon": "icon.png",
   "description": "Películas y series en español",
   "author": "ice-dev-x",
   "streamHosts": "any",
@@ -39,7 +39,7 @@
     "key": "servidor_pref",
     "label": "Servidor preferido",
     "type": "select",
-    "default": "1",
+    "default": "3",
     "options": [
       { "value": "1", "label": "Hyper (recomendado)" },
       { "value": "3", "label": "Nebula" },
