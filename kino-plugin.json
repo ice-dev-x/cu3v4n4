@@ -1,11 +1,11 @@
 {
-  "id": "cuevana3",
-  "name": "Cuevana",
+  "id": "cuevana3k",
+  "name": "Cuevana3k",
   "version": "2.0.7",
   "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
-  "description": "Películas y series en español",
+  "description": "Películas y series en español latino",
   "author": "ice-dev-x",
   "streamHosts": "any",
   "hosts": [
@@ -37,11 +37,11 @@
   "settings": [
   {
     "key": "servidor_pref",
-    "label": "Servidor preferido",
+    "label": "Servidor preferido, si algun contenido no funciona, cambie de servidor",
     "type": "select",
     "default": "3",
     "options": [
-      { "value": "1", "label": "Hyper (recomendado)" },
+      { "value": "1", "label": "Hyper" },
       { "value": "3", "label": "Nebula" },
       { "value": "cualquiera", "label": "Automático" }
     ]
