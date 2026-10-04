@@ -88,79 +88,84 @@ export async function home() {
     } catch (e) { return ""; }
   };
 
-  const [htmlHome, htmlPeliculas, htmlSeries, htmlPopulares,
-       htmlAccion, htmlComedia, htmlTerror, htmlAnimacion,
-       htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
-  fetchPage("/"),
-  fetchPage("/peliculas"),
-  fetchPage("/series"),
-  fetchPage("/tendencias"),
-  fetchPage("/peliculas?genero=Accion"),
-  fetchPage("/peliculas?genero=Comedia"),
-  fetchPage("/peliculas?genero=Terror"),
-  fetchPage("/peliculas?genero=Animacion"),
-  fetchPage("/peliculas?genero=Anime"),
-  fetchPage("/peliculas?genero=Ciencia Ficcion"),
-  fetchPage("/peliculas?genero=Suspenso"),
-  fetchPage("/peliculas?genero=Drama"),
-]);
+  // LOTE 1: Las 4 principales
+  const [htmlHome, htmlPeliculas, htmlSeries, htmlPopulares] = await Promise.all([
+    fetchPage("/"),
+    fetchPage("/peliculas"),
+    fetchPage("/series"),
+    fetchPage("/tendencias")
+  ]);
 
-// Extraer — los 5 originales igual que antes
-const estrenos         = extractItems(htmlHome, 20, false);
-const ultimosEpisodios = extractItems(htmlHome, 20, true);
-const peliculas        = extractItems(htmlPeliculas, 20, false);
-const series           = extractItems(htmlSeries, 20, false);
-const populares        = extractItems(htmlPopulares, 20, false);
-// Nuevos géneros
-const accion           = extractItems(htmlAccion, 20, false);
-const comedia          = extractItems(htmlComedia, 20, false);
-const terror           = extractItems(htmlTerror, 20, false);
-const animacion        = extractItems(htmlAnimacion, 20, false);
-const anime            = extractItems(htmlAnime, 20, false);
-const cienciaFic       = extractItems(htmlCienciaFiccion, 20, false);
-const suspenso         = extractItems(htmlSuspenso, 20, false);
-const drama            = extractItems(htmlDrama, 20, false);
+  // LOTE 2: Primeros 4 géneros (en minúsculas)
+  const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
+    fetchPage("/peliculas?genero=accion"),
+    fetchPage("/peliculas?genero=comedia"),
+    fetchPage("/peliculas?genero=terror"),
+    fetchPage("/peliculas?genero=animacion")
+  ]);
 
-const categories = [];
-// Los 5 originales
-if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
-if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
-if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
-if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
-if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
-// Nuevos géneros
-if (accion.length > 0)           categories.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
-if (comedia.length > 0)          categories.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
-if (terror.length > 0)           categories.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
-if (animacion.length > 0)        categories.push({ id: "animacion", title: "🎨 Animación",           ref: "animacion", items: animacion });
-if (anime.length > 0)            categories.push({ id: "anime",     title: "🎌 Anime",               ref: "anime",     items: anime });
-if (cienciaFic.length > 0)       categories.push({ id: "sci-fi",    title: "🚀 Ciencia Ficción",     ref: "sci-fi",    items: cienciaFic });
-if (suspenso.length > 0)         categories.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
-if (drama.length > 0)            categories.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
+  // LOTE 3: Últimos 4 géneros
+  const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
+    fetchPage("/peliculas?genero=anime"),
+    fetchPage("/peliculas?genero=ciencia-ficcion"), // Usa guion para evitar errores de espacios
+    fetchPage("/peliculas?genero=suspenso"),
+    fetchPage("/peliculas?genero=drama")
+  ]);
 
-return categories;
+  // Extraer
+  const estrenos         = extractItems(htmlHome, 20, false);
+  const ultimosEpisodios = extractItems(htmlHome, 20, true);
+  const peliculas        = extractItems(htmlPeliculas, 20, false);
+  const series           = extractItems(htmlSeries, 20, false);
+  const populares        = extractItems(htmlPopulares, 20, false);
+  
+  const accion           = extractItems(htmlAccion, 20, false);
+  const comedia          = extractItems(htmlComedia, 20, false);
+  const terror           = extractItems(htmlTerror, 20, false);
+  const animacion        = extractItems(htmlAnimacion, 20, false);
+  const anime            = extractItems(htmlAnime, 20, false);
+  const cienciaFic       = extractItems(htmlCienciaFiccion, 20, false);
+  const suspenso         = extractItems(htmlSuspenso, 20, false);
+  const drama            = extractItems(htmlDrama, 20, false);
 
+  const categories = [];
+  
+  if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
+  if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
+  if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
+  if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
+  if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
+  
+  if (accion.length > 0)           categories.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
+  if (comedia.length > 0)          categories.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
+  if (terror.length > 0)           categories.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
+  if (animacion.length > 0)        categories.push({ id: "animacion", title: "🎨 Animación",           ref: "animacion", items: animacion });
+  if (anime.length > 0)            categories.push({ id: "anime",     title: "🎌 Anime",               ref: "anime",     items: anime });
+  if (cienciaFic.length > 0)       categories.push({ id: "sci-fi",    title: "🚀 Ciencia Ficción",     ref: "sci-fi",    items: cienciaFic });
+  if (suspenso.length > 0)         categories.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
+  if (drama.length > 0)            categories.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
+
+  return categories;
 }
 
 export async function browse(ref, cursor) {
   await null;
 
   const paths = {
-    // Originales
     "estrenos":  "/",
     "episodios": "/",
     "populares": "/tendencias",
     "peliculas": "/peliculas",
     "series":    "/series",
-    // Géneros nuevos
-    "accion":    "/peliculas?genero=Accion",
-    "comedia":   "/peliculas?genero=Comedia",
-    "terror":    "/peliculas?genero=Terror",
-    "animacion": "/peliculas?genero=Animacion",
-    "anime":     "/peliculas?genero=Anime",
-    "sci-fi":    "/peliculas?genero=Ciencia Ficcion",
-    "suspenso":  "/peliculas?genero=Suspenso",
-    "drama":     "/peliculas?genero=Drama",
+    // Géneros en minúsculas
+    "accion":    "/peliculas?genero=accion",
+    "comedia":   "/peliculas?genero=comedia",
+    "terror":    "/peliculas?genero=terror",
+    "animacion": "/peliculas?genero=animacion",
+    "anime":     "/peliculas?genero=anime",
+    "sci-fi":    "/peliculas?genero=ciencia-ficcion",
+    "suspenso":  "/peliculas?genero=suspenso",
+    "drama":     "/peliculas?genero=drama",
   };
 
   const path = paths[ref];
