@@ -156,6 +156,7 @@ export async function browse(ref, cursor) {
     "episodios": "/",
     "populares": "/tendencias",
     "peliculas": "/peliculas",
+    "harry-potter": "/explorar?s=harry+potter",
     "series":    "/series",
     "accion":    "/peliculas?genero=accion",
     "comedia":   "/peliculas?genero=comedia",

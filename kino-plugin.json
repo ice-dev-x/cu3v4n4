@@ -1,7 +1,7 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "apiVersion": 4,
   "entry": "plugin.js",
   "description": "Películas",
