@@ -37,41 +37,59 @@ function extractTmdbId(url) {
 }
 
 export async function home() {
-  const res = await kino.fetch(`${BASE_URL}/`, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) return [];
-  const html = await res.text();
-  const items = [];
-  const vistos = new Set();
-  const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  let match;
+  // Creamos una sub-función reutilizable para raspar cualquier sección de Cuevana
+  const fetchCategory = async (path, limit = 20) => {
+    const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const items = [];
+    const vistos = new Set();
+    const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let match;
 
-  while ((match = aRegex.exec(html)) !== null && items.length < 40) {
-    let link = match[1];
-    if (link.includes("episodio")) continue;
-    const innerHtml = match[2];
-    const imgMatch = innerHtml.match(/(?:src|data-src|data-lazy)=(?:"([^"]+)"|([^ >]+))/i);
-    const titleMatch = innerHtml.match(/<h2[^>]*>([^<]+)<\/h2>/i) || innerHtml.match(/alt="([^"]+)"/i);
-    const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
-    if (imgMatch && titleMatch && !vistos.has(link)) {
-      vistos.add(link);
-      let poster = imgMatch[1] || imgMatch[2];
-      if (poster.startsWith("//")) poster = "https:" + poster;
-      if (poster.startsWith("/")) poster = BASE_URL + poster;
-      const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
-      const tmdbId = extractTmdbId(fullLink);
-      const item = {
-        id: link.replace(BASE_URL, "").replace(/[^a-zA-Z0-9_-]/g, "") || ("item-" + items.length),
-        ref: fullLink,
-        title: cleanText(titleMatch[1] || titleMatch[2]),
-        kind: link.includes("/serie/") ? "series" : "movie",
-        poster: poster
-      };
-      if (yearMatch) item.year = parseInt(yearMatch[1], 10);
-      if (tmdbId) item.ids = { tmdb: tmdbId };
-      items.push(item);
+    while ((match = aRegex.exec(html)) !== null && items.length < limit) {
+      let link = match[1];
+      if (link.includes("episodio")) continue;
+      const innerHtml = match[2];
+      const imgMatch = innerHtml.match(/(?:src|data-src|data-lazy)=(?:"([^"]+)"|([^ >]+))/i);
+      const titleMatch = innerHtml.match(/<h2[^>]*>([^<]+)<\/h2>/i) || innerHtml.match(/alt="([^"]+)"/i);
+      const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
+      if (imgMatch && titleMatch && !vistos.has(link)) {
+        vistos.add(link);
+        let poster = imgMatch[1] || imgMatch[2];
+        if (poster.startsWith("//")) poster = "https:" + poster;
+        if (poster.startsWith("/")) poster = BASE_URL + poster;
+        const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
+        const tmdbId = extractTmdbId(fullLink);
+        const item = {
+          id: link.replace(BASE_URL, "").replace(/[^a-zA-Z0-9_-]/g, "") || ("item-" + items.length),
+          ref: fullLink,
+          title: cleanText(titleMatch[1] || titleMatch[2]),
+          kind: link.includes("/serie/") ? "series" : "movie",
+          poster: poster
+        };
+        if (yearMatch) item.year = parseInt(yearMatch[1], 10);
+        if (tmdbId) item.ids = { tmdb: tmdbId };
+        items.push(item);
+      }
     }
-  }
-  return [{ id: "recientes", title: "Recientes en Cuevana", items }];
+    return items;
+  };
+
+  // Hacemos las peticiones en paralelo para que el home cargue rápido
+  const [estrenos, peliculas, series] = await Promise.all([
+    fetchCategory("/", 20),           // Página principal (mezclado)
+    fetchCategory("/peliculas", 20),  // Sección solo películas
+    fetchCategory("/series", 20)      // Sección solo series
+  ]);
+
+  // Armamos las categorías que Kino mostrará
+  const categories = [];
+  if (estrenos.length > 0) categories.push({ id: "estrenos", title: "🔥 Estrenos Destacados", items: estrenos });
+  if (peliculas.length > 0) categories.push({ id: "peliculas", title: "🎬 Películas Agregadas", items: peliculas });
+  if (series.length > 0) categories.push({ id: "series", title: "📺 Series Actualizadas", items: series });
+
+  return categories;
 }
 
 export async function search(query) {

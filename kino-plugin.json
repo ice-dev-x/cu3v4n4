@@ -1,10 +1,10 @@
 {
   "id": "cuevana",
   "name": "Cuevana",
-  "version": "2.0.1",
+  "version": "2.0.5",
   "apiVersion": 4,
   "entry": "plugin.js",
-  "icon": "icon.png",
+  "icon": "icon-2.png",
   "description": "Películas y series en español",
   "author": "ice-dev-x",
   "streamHosts": "any",
@@ -35,19 +35,17 @@
     "resolve"
   ],
   "settings": [
-    {
-      "key": "servidor_pref",
-      "label": "Servidor preferido (Series)",
-      "type": "select",
-      "default": "cualquiera",
-      "options": [
-        { "value": "cualquiera", "label": "Automático (Cualquiera disponible)" },
-        { "value": "2", "label": "Filemoon" },
-        { "value": "4", "label": "Doodstream" },
-        { "value": "1", "label": "Opción 1 (Hyper/Goldmember)" },
-        { "value": "3", "label": "Opción 3 (Nebula/Trinity)" }
-      ]
-    }
-  ],
+  {
+    "key": "servidor_pref",
+    "label": "Servidor preferido",
+    "type": "select",
+    "default": "1",
+    "options": [
+      { "value": "1", "label": "Hyper (recomendado)" },
+      { "value": "3", "label": "Nebula" },
+      { "value": "cualquiera", "label": "Automático" }
+    ]
+  }
+],
   "color": "#035453"
 }
