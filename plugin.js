@@ -114,15 +114,16 @@ export async function home() {
  
   ]);
   // LOTE 4: Series por género
-  const [htmlSeriesAccion, htmlSeriesComedia, htmlSeriesSciFi] = await Promise.all([
+  const [htmlSeriesTerror, htmlSeriesAnime, htmlSeriesAccion, htmlSeriesComedia, htmlSeriesRomance, htmlSeriesSciFi] = await Promise.all([
     fetchPage("/series?genero=terror"),
     fetchPage("/series?genero=anime"),
     fetchPage("/series?genero=accion"),
     fetchPage("/series?genero=comedia"),
     fetchPage("/series?genero=romance"),
     fetchPage("/series?genero=ciencia-ficcion")
-
   ]);
+
+
 
   // Extraer
   const estrenos         = extractItems(htmlHome, 20, false);
