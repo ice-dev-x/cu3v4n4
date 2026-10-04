@@ -1,11 +1,11 @@
 {
   "id": "cuevana3k",
   "name": "Cuevana3k",
-  "version": "2.0.8",
+  "version": "2.1.0",
   "apiVersion": 4,
   "entry": "plugin.js",
   "icon": "icon.png",
-  "description": "Películas y series en español latino",
+  "description": "Películas y series",
   "author": "ice-dev-x",
   "streamHosts": "any",
   "hosts": [
