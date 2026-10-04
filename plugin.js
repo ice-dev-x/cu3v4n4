@@ -1,5 +1,8 @@
 const BASE_URL = "https://cuevana3k.pro";
 
+function log(...args) {
+  try { kino.log(...args); } catch { }
+}
 function cleanText(text) {
   if (!text) return "";
   return text
@@ -104,12 +107,12 @@ export async function home() {
     return items;
   };
 
-  // Extraemos las secciones usando los límites (puedes subir el 20 a 40 si quieres más items por carril)
-  const estrenos = extractItems(htmlHome, 40, false);
-  const ultimosEpisodios = extractItems(htmlHome, 40, true);
-  const peliculas = extractItems(htmlPeliculas, 40, false);
-  const series = extractItems(htmlSeries, 40, false);
-  const populares = extractItems(htmlPopulares, 40, false);
+  // secciones
+  const estrenos = extractItems(htmlHome, 20, false);
+  const ultimosEpisodios = extractItems(htmlHome, 20, true);
+  const peliculas = extractItems(htmlPeliculas, 20, false);
+  const series = extractItems(htmlSeries, 20, false);
+  const populares = extractItems(htmlPopulares, 20, false);
 
   const categories = [];
   if (estrenos.length > 0) categories.push({ id: "estrenos", title: "🔥 Estrenos Destacados", items: estrenos });
@@ -157,6 +160,35 @@ export async function search(query) {
     }
   }
   return results;
+}
+export async function browse(ref, cursor) {
+  await null; // primer await antes de cualquier throw
+
+  const paths = {
+    "estrenos":  "/",
+    "episodios": "/",
+    "populares": "/tendencias",
+    "peliculas": "/peliculas",
+    "series":    "/series"
+  };
+
+  const path = paths[ref];
+  if (!path) throw kino.error("not_found", "esa fila ya no existe");
+
+  const page = cursor ? Number(cursor) : 1;
+  const url = page > 1 ? `${BASE_URL}${path}?page=${page}` : `${BASE_URL}${path}`;
+
+  const res = await kino.fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw kino.error("not_found", "no se pudo cargar la página");
+
+  const html = await res.text();
+  const isEpisode = ref === "episodios";
+  const items = extractItems(html, 40, isEpisode);
+
+  return {
+    items,
+    next: items.length >= 40 ? String(page + 1) : undefined
+  };
 }
 
 export async function episodes(ref) {
@@ -290,6 +322,7 @@ export async function episodes(ref) {
 }
 
 export async function resolve(ref) {
+  await null
   try {
     let targetUrl = ref;
     let selectedServer = null;

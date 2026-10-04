@@ -1,10 +1,9 @@
 {
   "id": "cuevana3k",
   "name": "Cuevana3k",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "apiVersion": 4,
   "entry": "plugin.js",
-  "icon": "icon.png",
   "description": "Películas y series",
   "author": "ice-dev-x",
   "streamHosts": "any",
@@ -31,6 +30,7 @@
   "capabilities": [
     "search",
     "home",
+    "browse",
     "episodes",
     "resolve"
   ],
@@ -47,5 +47,6 @@
     ]
   }
 ],
-  "color": "#035453"
+  "color": "#035453",
+  "icon": "icon.png"
 }
