@@ -37,7 +37,7 @@
   "settings": [
   {
     "key": "servidor_pref",
-    "label": "Servidor preferido, si algun contenido no funciona, cambie de servidor",
+    "label": "Servidor preferido",
     "type": "select",
     "default": "3",
     "options": [
