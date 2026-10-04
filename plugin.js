@@ -80,48 +80,41 @@ function extractItems(html, limit = 20, isEpisode = false) {
 }
 
 export async function home() {
+ // 1. Añadimos un escudo anti-bloqueos con una pequeña pausa de 300 milisegundos
   const fetchPage = async (path) => {
     try {
       const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      await new Promise(r => setTimeout(r, 300)); // Pausa mágica para calmar al servidor
       if (!res.ok) return "";
       return await res.text();
     } catch (e) { return ""; }
   };
 
-  // LOTE 1: Las 4 principales
-  const [htmlHome, htmlPeliculas, htmlSeries, htmlPopulares] = await Promise.all([
-    fetchPage("/"),
-    fetchPage("/peliculas"),
-    fetchPage("/series"),
-    fetchPage("/tendencias")
-  ]);
+  // 2. Adiós a los Promise.all. Pedimos todo secuencialmente, como un usuario humano.
+  
+  // Principales
+  const htmlHome = await fetchPage("/");
+  const htmlPeliculas = await fetchPage("/peliculas");
+  const htmlSeries = await fetchPage("/series");
+  const htmlPopulares = await fetchPage("/tendencias");
 
-  // LOTE 2: Primeros 4 géneros (en minúsculas)
-  const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
-    fetchPage("/peliculas?genero=accion"),
-    fetchPage("/peliculas?genero=comedia"),
-    fetchPage("/peliculas?genero=terror"),
-    fetchPage("/peliculas?genero=animacion")
-  ]);
+  // Películas
+  const htmlAccion = await fetchPage("/peliculas?genero=accion");
+  const htmlComedia = await fetchPage("/peliculas?genero=comedia");
+  const htmlTerror = await fetchPage("/peliculas?genero=terror");
+  const htmlAnimacion = await fetchPage("/peliculas?genero=animacion");
+  const htmlAnime = await fetchPage("/peliculas?genero=anime");
+  const htmlCienciaFiccion = await fetchPage("/peliculas?genero=ciencia-ficcion");
+  const htmlSuspenso = await fetchPage("/peliculas?genero=suspenso");
+  const htmlDrama = await fetchPage("/peliculas?genero=drama");
 
-  // LOTE 3: Últimos 4 géneros
-  const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
-    fetchPage("/peliculas?genero=anime"),
-    fetchPage("/peliculas?genero=ciencia-ficcion"), // Usa guion para evitar errores de espacios
-    fetchPage("/peliculas?genero=suspenso"),
-    fetchPage("/peliculas?genero=drama")
-    // LOTE 4: Series por género
- 
-  ]);
-  // LOTE 4: Series por género
-  const [htmlSeriesTerror, htmlSeriesAnime, htmlSeriesAccion, htmlSeriesComedia, htmlSeriesRomance, htmlSeriesSciFi] = await Promise.all([
-    fetchPage("/series?genero=terror"),
-    fetchPage("/series?genero=anime"),
-    fetchPage("/series?genero=accion"),
-    fetchPage("/series?genero=comedia"),
-    fetchPage("/series?genero=romance"),
-    fetchPage("/series?genero=ciencia-ficcion")
-  ]);
+  // Series
+  const htmlSeriesTerror = await fetchPage("/series?genero=terror");
+  const htmlSeriesAnime = await fetchPage("/series?genero=anime");
+  const htmlSeriesAccion = await fetchPage("/series?genero=accion");
+  const htmlSeriesComedia = await fetchPage("/series?genero=comedia");
+  const htmlSeriesRomance = await fetchPage("/series?genero=romance");
+  const htmlSeriesSciFi = await fetchPage("/series?genero=ciencia-ficcion");
 
 
 
