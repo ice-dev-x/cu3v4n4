@@ -186,7 +186,7 @@ export async function browse(ref, cursor) {
 
   return {
     items,
-    next: items.length >= 40 ? String(page + 1) : undefined
+    next: items.length >= 10 ? String(page + 1) : undefined
   };
 }
 
