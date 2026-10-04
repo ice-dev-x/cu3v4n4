@@ -37,10 +37,28 @@ function extractTmdbId(url) {
 }
 
 export async function home() {
-  const fetchCategory = async (path, limit = 20) => {
-    const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
-    if (!res.ok) return [];
-    const html = await res.text();
+  // Función interna segura con try-catch para no romper todo si falla una
+  const fetchPage = async (path) => {
+    try {
+      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) return "";
+      return await res.text();
+    } catch (e) { 
+      return ""; 
+    }
+  };
+
+  // Hacemos solo 4 peticiones clave para evitar el bloqueo antibots
+  const [htmlHome, htmlPeliculas, htmlSeries, htmlPopulares] = await Promise.all([
+    fetchPage("/"),
+    fetchPage("/peliculas"),
+    fetchPage("/series"),
+    fetchPage("/tendencias") // Ruta habitual de populares
+  ]);
+
+  // Función inteligente para extraer los items
+  const extractItems = (html, limit = 20, isEpisode = false) => {
+    if (!html) return [];
     const items = [];
     const vistos = new Set();
     const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -48,18 +66,30 @@ export async function home() {
 
     while ((match = aRegex.exec(html)) !== null && items.length < limit) {
       let link = match[1];
-      if (link.includes("episodio")) continue;
+      
+      if (isEpisode) {
+        // Solo dejamos pasar episodios
+        if (!link.includes("episodio")) continue;
+        // Truco: Recortamos la URL del episodio para que dirija a la serie principal
+        link = link.replace(/\/episodio-\d+x\d+/i, ""); 
+      } else {
+        // Ignoramos episodios en las demás categorías
+        if (link.includes("episodio")) continue;
+      }
+
       const innerHtml = match[2];
       const imgMatch = innerHtml.match(/(?:src|data-src|data-lazy)=(?:"([^"]+)"|([^ >]+))/i);
       const titleMatch = innerHtml.match(/<h2[^>]*>([^<]+)<\/h2>/i) || innerHtml.match(/alt="([^"]+)"/i);
-      const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
+      
       if (imgMatch && titleMatch && !vistos.has(link)) {
         vistos.add(link);
         let poster = imgMatch[1] || imgMatch[2];
         if (poster.startsWith("//")) poster = "https:" + poster;
         if (poster.startsWith("/")) poster = BASE_URL + poster;
+        
         const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
         const tmdbId = extractTmdbId(fullLink);
+        
         const item = {
           id: link.replace(BASE_URL, "").replace(/[^a-zA-Z0-9_-]/g, "") || ("item-" + items.length),
           ref: fullLink,
@@ -67,7 +97,6 @@ export async function home() {
           kind: link.includes("/serie/") ? "series" : "movie",
           poster: poster
         };
-        if (yearMatch) item.year = parseInt(yearMatch[1], 10);
         if (tmdbId) item.ids = { tmdb: tmdbId };
         items.push(item);
       }
@@ -75,26 +104,19 @@ export async function home() {
     return items;
   };
 
-  // Hacemos las peticiones en paralelo añadiendo los géneros
-  const [estrenos, peliculas, series, accion, terror, anime, romance] = await Promise.all([
-    fetchCategory("/", 20),
-    fetchCategory("/peliculas", 20),
-    fetchCategory("/series", 20),
-    fetchCategory("/genero/accion", 20),
-    fetchCategory("/genero/terror", 20),
-    fetchCategory("/genero/animacion", 20), // En Cuevana suele ser "animacion" para anime/cartoons
-    fetchCategory("/genero/romance", 20)
-  ]);
+  // Extraemos las secciones usando los límites (puedes subir el 20 a 40 si quieres más items por carril)
+  const estrenos = extractItems(htmlHome, 40, false);
+  const ultimosEpisodios = extractItems(htmlHome, 40, true);
+  const peliculas = extractItems(htmlPeliculas, 40, false);
+  const series = extractItems(htmlSeries, 40, false);
+  const populares = extractItems(htmlPopulares, 40, false);
 
-  // Armamos las categorías con sus respectivos emojis para la interfaz
   const categories = [];
   if (estrenos.length > 0) categories.push({ id: "estrenos", title: "🔥 Estrenos Destacados", items: estrenos });
+  if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios", items: ultimosEpisodios });
+  if (populares.length > 0) categories.push({ id: "populares", title: "⭐ Películas Populares", items: populares });
   if (peliculas.length > 0) categories.push({ id: "peliculas", title: "🎬 Películas Agregadas", items: peliculas });
   if (series.length > 0) categories.push({ id: "series", title: "📺 Series Actualizadas", items: series });
-  if (accion.length > 0) categories.push({ id: "accion", title: "💥 Acción", items: accion });
-  if (terror.length > 0) categories.push({ id: "terror", title: "👻 Terror", items: terror });
-  if (anime.length > 0) categories.push({ id: "anime", title: "🎌 Anime y Animación", items: anime });
-  if (romance.length > 0) categories.push({ id: "romance", title: "❤️ Romance", items: romance });
 
   return categories;
 }
