@@ -109,12 +109,12 @@ export async function home() {
   const htmlDrama = await fetchPage("/peliculas?genero=drama");
 
   // Series
-  const htmlSeriesTerror = await fetchPage("/series?genero=terror");
-  const htmlSeriesAnime = await fetchPage("/series?genero=anime");
-  const htmlSeriesAccion = await fetchPage("/series?genero=accion");
-  const htmlSeriesComedia = await fetchPage("/series?genero=comedia");
-  const htmlSeriesRomance = await fetchPage("/series?genero=romance");
-  const htmlSeriesSciFi = await fetchPage("/series?genero=ciencia-ficcion");
+  // const htmlSeriesTerror = await fetchPage("/series?genero=terror");
+  // const htmlSeriesAnime = await fetchPage("/series?genero=anime");
+  // const htmlSeriesAccion = await fetchPage("/series?genero=accion");
+  // const htmlSeriesComedia = await fetchPage("/series?genero=comedia");
+  // const htmlSeriesRomance = await fetchPage("/series?genero=romance");
+  // const htmlSeriesSciFi = await fetchPage("/series?genero=ciencia-ficcion");
 
 
 
