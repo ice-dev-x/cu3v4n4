@@ -93,6 +93,7 @@ export async function home() {
   const htmlPeliculas     = await fetchPage("/peliculas");
   const htmlSeries        = await fetchPage("/series");
   const htmlPopulares     = await fetchPage("/tendencias");
+  const htmlHarryPotter = await fetchPage("/explorar?s=harry+potter");
   const htmlAccion        = await fetchPage("/peliculas?genero=accion");
   const htmlComedia       = await fetchPage("/peliculas?genero=comedia");
   const htmlTerror        = await fetchPage("/peliculas?genero=terror");
@@ -107,7 +108,7 @@ export async function home() {
   const peliculas        = extractItems(htmlPeliculas, 20, false);
   const series           = extractItems(htmlSeries, 20, false);
   const populares        = extractItems(htmlPopulares, 20, false);
-  
+  const harryPotter     = extractItems(htmlHarryPotter, 20, false);
   const accion           = extractItems(htmlAccion, 20, false);
   const comedia          = extractItems(htmlComedia, 20, false);
   const terror           = extractItems(htmlTerror, 20, false);
@@ -117,10 +118,20 @@ export async function home() {
   const suspenso         = extractItems(htmlSuspenso, 20, false);
   const drama            = extractItems(htmlDrama, 20, false);
 
+
   const categories = [];
   
   if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
   if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
+  // 👉 Harry Potter
+  if (harryPotter.length > 0) {
+    categories.push({ 
+      id: "harry-potter", 
+      title: "⚡ Saga Harry Potter", 
+      ref: "harry-potter", 
+      items: harryPotter 
+    });
+  }
   if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
   if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
   if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
