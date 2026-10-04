@@ -80,51 +80,34 @@ function extractItems(html, limit = 20, isEpisode = false) {
 }
 
 export async function home() {
- // 1. Añadimos un escudo anti-bloqueos con una pequeña pausa de 300 milisegundos
   const fetchPage = async (path) => {
     try {
       const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
-      //await new Promise(r => setTimeout(r, 300)); // Pausa mágica para calmar al servidor
       if (!res.ok) return "";
       return await res.text();
     } catch (e) { return ""; }
   };
 
-  // 2. Adiós a los Promise.all. Pedimos todo secuencialmente, como un usuario humano.
-
-  // Principales
-  const htmlHome = await fetchPage("/");
-  const htmlPeliculas = await fetchPage("/peliculas");
-  const htmlSeries = await fetchPage("/series");
-  const htmlPopulares = await fetchPage("/tendencias");
-
-  // Películas
-  const htmlAccion = await fetchPage("/peliculas?genero=accion");
-  const htmlComedia = await fetchPage("/peliculas?genero=comedia");
-  const htmlTerror = await fetchPage("/peliculas?genero=terror");
-  const htmlAnimacion = await fetchPage("/peliculas?genero=animacion");
-  const htmlAnime = await fetchPage("/peliculas?genero=anime");
+  // Secciones principales y géneros de películas
+  const htmlHome          = await fetchPage("/");
+  const htmlPeliculas     = await fetchPage("/peliculas");
+  const htmlSeries        = await fetchPage("/series");
+  const htmlPopulares     = await fetchPage("/tendencias");
+  const htmlAccion        = await fetchPage("/peliculas?genero=accion");
+  const htmlComedia       = await fetchPage("/peliculas?genero=comedia");
+  const htmlTerror        = await fetchPage("/peliculas?genero=terror");
+  const htmlAnimacion     = await fetchPage("/peliculas?genero=animacion");
+  const htmlAnime         = await fetchPage("/peliculas?genero=anime");
   const htmlCienciaFiccion = await fetchPage("/peliculas?genero=ciencia-ficcion");
-  const htmlSuspenso = await fetchPage("/peliculas?genero=suspenso");
-  const htmlDrama = await fetchPage("/peliculas?genero=drama");
+  const htmlSuspenso      = await fetchPage("/peliculas?genero=suspenso");
+  const htmlDrama         = await fetchPage("/peliculas?genero=drama");
 
-  // Series
-  const htmlSeriesTerror = await fetchPage("/series?genero=terror");
-  const htmlSeriesAnime = await fetchPage("/series?genero=anime");
-  const htmlSeriesAccion = await fetchPage("/series?genero=accion");
-  const htmlSeriesComedia = await fetchPage("/series?genero=comedia");
-  const htmlSeriesRomance = await fetchPage("/series?genero=romance");
-  const htmlSeriesSciFi = await fetchPage("/series?genero=ciencia-ficcion");
-
-
-
-  // Extraer
   const estrenos         = extractItems(htmlHome, 20, false);
   const ultimosEpisodios = extractItems(htmlHome, 20, true);
   const peliculas        = extractItems(htmlPeliculas, 20, false);
   const series           = extractItems(htmlSeries, 20, false);
   const populares        = extractItems(htmlPopulares, 20, false);
-
+  
   const accion           = extractItems(htmlAccion, 20, false);
   const comedia          = extractItems(htmlComedia, 20, false);
   const terror           = extractItems(htmlTerror, 20, false);
@@ -133,22 +116,15 @@ export async function home() {
   const cienciaFic       = extractItems(htmlCienciaFiccion, 20, false);
   const suspenso         = extractItems(htmlSuspenso, 20, false);
   const drama            = extractItems(htmlDrama, 20, false);
-  // Extraer las series
-  const seriesTerror  = extractItems(htmlSeriesTerror, 20, false);
-  const seriesAnime   = extractItems(htmlSeriesAnime, 20, false);
-  const seriesAccion  = extractItems(htmlSeriesAccion, 20, false);
-  const seriesComedia = extractItems(htmlSeriesComedia, 20, false);
-  const seriesRomance = extractItems(htmlSeriesRomance, 20, false);
-  const seriesSciFi   = extractItems(htmlSeriesSciFi, 20, false);
 
   const categories = [];
-
+  
   if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
   if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
   if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
   if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
   if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
-
+  
   if (accion.length > 0)           categories.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
   if (comedia.length > 0)          categories.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
   if (terror.length > 0)           categories.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
@@ -158,13 +134,6 @@ export async function home() {
   if (suspenso.length > 0)         categories.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
   if (drama.length > 0)            categories.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
-  // Nuevas categorías de Series
-  if (seriesTerror.length > 0)  categories.push({ id: "s-terror",  title: "🧛 Series de Terror",          ref: "s-terror",  items: seriesTerror });
-  if (seriesAnime.length > 0)   categories.push({ id: "s-anime",   title: "⛩️ Anime (Series)",            ref: "s-anime",   items: seriesAnime });
-  if (seriesAccion.length > 0)  categories.push({ id: "s-accion",  title: "🎬 Series de Acción",          ref: "s-accion",  items: seriesAccion });
-  if (seriesComedia.length > 0) categories.push({ id: "s-comedia", title: "🤣 Series de Comedia",         ref: "s-comedia", items: seriesComedia });
-  if (seriesRomance.length > 0) categories.push({ id: "s-romance", title: "💖 Series de Romance",         ref: "s-romance", items: seriesRomance });
-  if (seriesSciFi.length > 0)   categories.push({ id: "s-scifi",   title: "🛸 Series de Ciencia Ficción", ref: "s-scifi",   items: seriesSciFi });
   return categories;
 }
 
@@ -177,7 +146,6 @@ export async function browse(ref, cursor) {
     "populares": "/tendencias",
     "peliculas": "/peliculas",
     "series":    "/series",
-    // Géneros en minúsculas
     "accion":    "/peliculas?genero=accion",
     "comedia":   "/peliculas?genero=comedia",
     "terror":    "/peliculas?genero=terror",
@@ -185,15 +153,7 @@ export async function browse(ref, cursor) {
     "anime":     "/peliculas?genero=anime",
     "sci-fi":    "/peliculas?genero=ciencia-ficcion",
     "suspenso":  "/peliculas?genero=suspenso",
-    "drama":     "/peliculas?genero=drama",
-
-    // Nuevas rutas para el scroll infinito de Series
-    "s-terror":  "/series?genero=terror",
-    "s-anime":   "/series?genero=anime",
-    "s-accion":  "/series?genero=accion",
-    "s-comedia": "/series?genero=comedia",
-    "s-romance": "/series?genero=romance",
-    "s-scifi":   "/series?genero=ciencia-ficcion"
+    "drama":     "/peliculas?genero=drama"
   };
 
   const path = paths[ref];
@@ -201,7 +161,6 @@ export async function browse(ref, cursor) {
 
   const page = cursor ? Number(cursor) : 1;
 
-  // Para rutas con parámetros existentes usamos & para el page, sino ?page=
   const url = page > 1
     ? `${BASE_URL}${path}${path.includes("?") ? "&" : "?"}page=${page}`
     : `${BASE_URL}${path}`;
@@ -443,7 +402,15 @@ export async function resolve(ref) {
                 if (streamUrl.includes('.urlset/master.m3u8')) {
                   streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
                 }
-                return { url: streamUrl, headers: { "Referer": iframeUrl, "Origin": originUrl, "User-Agent": "Mozilla/5.0", "Accept": "*/*" } };
+                return { 
+                  url: streamUrl, 
+                  headers: { 
+                    "Referer": iframeUrl, 
+                    "Origin": originUrl, 
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+                    "Accept": "*/*" 
+                  } 
+                };
               }
             }
           } else {
@@ -455,7 +422,15 @@ export async function resolve(ref) {
               if (streamUrl.includes('.urlset/master.m3u8')) {
                 streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
               }
-              return { url: streamUrl, headers: { "Referer": iframeUrl } };
+              return { 
+                url: streamUrl, 
+                headers: { 
+                  "Referer": iframeUrl, 
+                  "Origin": originUrl, 
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+                  "Accept": "*/*" 
+                } 
+              };
             }
           }
         }
