@@ -84,14 +84,14 @@ export async function home() {
   const fetchPage = async (path) => {
     try {
       const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
-      await new Promise(r => setTimeout(r, 300)); // Pausa mágica para calmar al servidor
+      //await new Promise(r => setTimeout(r, 300)); // Pausa mágica para calmar al servidor
       if (!res.ok) return "";
       return await res.text();
     } catch (e) { return ""; }
   };
 
   // 2. Adiós a los Promise.all. Pedimos todo secuencialmente, como un usuario humano.
-  
+
   // Principales
   const htmlHome = await fetchPage("/");
   const htmlPeliculas = await fetchPage("/peliculas");
@@ -109,12 +109,12 @@ export async function home() {
   const htmlDrama = await fetchPage("/peliculas?genero=drama");
 
   // Series
-  // const htmlSeriesTerror = await fetchPage("/series?genero=terror");
-  // const htmlSeriesAnime = await fetchPage("/series?genero=anime");
-  // const htmlSeriesAccion = await fetchPage("/series?genero=accion");
-  // const htmlSeriesComedia = await fetchPage("/series?genero=comedia");
-  // const htmlSeriesRomance = await fetchPage("/series?genero=romance");
-  // const htmlSeriesSciFi = await fetchPage("/series?genero=ciencia-ficcion");
+  const htmlSeriesTerror = await fetchPage("/series?genero=terror");
+  const htmlSeriesAnime = await fetchPage("/series?genero=anime");
+  const htmlSeriesAccion = await fetchPage("/series?genero=accion");
+  const htmlSeriesComedia = await fetchPage("/series?genero=comedia");
+  const htmlSeriesRomance = await fetchPage("/series?genero=romance");
+  const htmlSeriesSciFi = await fetchPage("/series?genero=ciencia-ficcion");
 
 
 
@@ -124,7 +124,7 @@ export async function home() {
   const peliculas        = extractItems(htmlPeliculas, 20, false);
   const series           = extractItems(htmlSeries, 20, false);
   const populares        = extractItems(htmlPopulares, 20, false);
-  
+
   const accion           = extractItems(htmlAccion, 20, false);
   const comedia          = extractItems(htmlComedia, 20, false);
   const terror           = extractItems(htmlTerror, 20, false);
@@ -142,13 +142,13 @@ export async function home() {
   const seriesSciFi   = extractItems(htmlSeriesSciFi, 20, false);
 
   const categories = [];
-  
+
   if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
   if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
   if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
   if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
   if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
-  
+
   if (accion.length > 0)           categories.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
   if (comedia.length > 0)          categories.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
   if (terror.length > 0)           categories.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
