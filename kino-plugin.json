@@ -2,7 +2,7 @@
   "id": "cuevana3k",
   "name": "Cuevana3k",
   "version": "2.1.2",
-  "apiVersion": 6,
+  "apiVersion": 5,
   "entry": "plugin.js",
   "description": "Películas y series",
   "author": "ice-dev-x",
