@@ -37,7 +37,6 @@ function extractTmdbId(url) {
 }
 
 export async function home() {
-  // Creamos una sub-función reutilizable para raspar cualquier sección de Cuevana
   const fetchCategory = async (path, limit = 20) => {
     const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
     if (!res.ok) return [];
@@ -76,18 +75,26 @@ export async function home() {
     return items;
   };
 
-  // Hacemos las peticiones en paralelo para que el home cargue rápido
-  const [estrenos, peliculas, series] = await Promise.all([
-    fetchCategory("/", 20),           // Página principal (mezclado)
-    fetchCategory("/peliculas", 20),  // Sección solo películas
-    fetchCategory("/series", 20)      // Sección solo series
+  // Hacemos las peticiones en paralelo añadiendo los géneros
+  const [estrenos, peliculas, series, accion, terror, anime, romance] = await Promise.all([
+    fetchCategory("/", 20),
+    fetchCategory("/peliculas", 20),
+    fetchCategory("/series", 20),
+    fetchCategory("/genero/accion", 20),
+    fetchCategory("/genero/terror", 20),
+    fetchCategory("/genero/animacion", 20), // En Cuevana suele ser "animacion" para anime/cartoons
+    fetchCategory("/genero/romance", 20)
   ]);
 
-  // Armamos las categorías que Kino mostrará
+  // Armamos las categorías con sus respectivos emojis para la interfaz
   const categories = [];
   if (estrenos.length > 0) categories.push({ id: "estrenos", title: "🔥 Estrenos Destacados", items: estrenos });
   if (peliculas.length > 0) categories.push({ id: "peliculas", title: "🎬 Películas Agregadas", items: peliculas });
   if (series.length > 0) categories.push({ id: "series", title: "📺 Series Actualizadas", items: series });
+  if (accion.length > 0) categories.push({ id: "accion", title: "💥 Acción", items: accion });
+  if (terror.length > 0) categories.push({ id: "terror", title: "👻 Terror", items: terror });
+  if (anime.length > 0) categories.push({ id: "anime", title: "🎌 Anime y Animación", items: anime });
+  if (romance.length > 0) categories.push({ id: "romance", title: "❤️ Romance", items: romance });
 
   return categories;
 }
