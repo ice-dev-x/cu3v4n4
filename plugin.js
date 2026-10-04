@@ -110,6 +110,18 @@ export async function home() {
     fetchPage("/peliculas?genero=ciencia-ficcion"), // Usa guion para evitar errores de espacios
     fetchPage("/peliculas?genero=suspenso"),
     fetchPage("/peliculas?genero=drama")
+    // LOTE 4: Series por género
+ 
+  ]);
+  // LOTE 4: Series por género
+  const [htmlSeriesAccion, htmlSeriesComedia, htmlSeriesSciFi] = await Promise.all([
+    fetchPage("/series?genero=terror"),
+    fetchPage("/series?genero=anime"),
+    fetchPage("/series?genero=accion"),
+    fetchPage("/series?genero=comedia"),
+    fetchPage("/series?genero=romance"),
+    fetchPage("/series?genero=ciencia-ficcion")
+
   ]);
 
   // Extraer
@@ -127,6 +139,13 @@ export async function home() {
   const cienciaFic       = extractItems(htmlCienciaFiccion, 20, false);
   const suspenso         = extractItems(htmlSuspenso, 20, false);
   const drama            = extractItems(htmlDrama, 20, false);
+  // Extraer las series
+  const seriesTerror  = extractItems(htmlSeriesTerror, 20, false);
+  const seriesAnime   = extractItems(htmlSeriesAnime, 20, false);
+  const seriesAccion  = extractItems(htmlSeriesAccion, 20, false);
+  const seriesComedia = extractItems(htmlSeriesComedia, 20, false);
+  const seriesRomance = extractItems(htmlSeriesRomance, 20, false);
+  const seriesSciFi   = extractItems(htmlSeriesSciFi, 20, false);
 
   const categories = [];
   
@@ -145,6 +164,13 @@ export async function home() {
   if (suspenso.length > 0)         categories.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
   if (drama.length > 0)            categories.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
+  // Nuevas categorías de Series
+  if (seriesTerror.length > 0)  categories.push({ id: "s-terror",  title: "🧛 Series de Terror",          ref: "s-terror",  items: seriesTerror });
+  if (seriesAnime.length > 0)   categories.push({ id: "s-anime",   title: "⛩️ Anime (Series)",            ref: "s-anime",   items: seriesAnime });
+  if (seriesAccion.length > 0)  categories.push({ id: "s-accion",  title: "🎬 Series de Acción",          ref: "s-accion",  items: seriesAccion });
+  if (seriesComedia.length > 0) categories.push({ id: "s-comedia", title: "🤣 Series de Comedia",         ref: "s-comedia", items: seriesComedia });
+  if (seriesRomance.length > 0) categories.push({ id: "s-romance", title: "💖 Series de Romance",         ref: "s-romance", items: seriesRomance });
+  if (seriesSciFi.length > 0)   categories.push({ id: "s-scifi",   title: "🛸 Series de Ciencia Ficción", ref: "s-scifi",   items: seriesSciFi });
   return categories;
 }
 
@@ -166,6 +192,14 @@ export async function browse(ref, cursor) {
     "sci-fi":    "/peliculas?genero=ciencia-ficcion",
     "suspenso":  "/peliculas?genero=suspenso",
     "drama":     "/peliculas?genero=drama",
+
+    // Nuevas rutas para el scroll infinito de Series
+    "s-terror":  "/series?genero=terror",
+    "s-anime":   "/series?genero=anime",
+    "s-accion":  "/series?genero=accion",
+    "s-comedia": "/series?genero=comedia",
+    "s-romance": "/series?genero=romance",
+    "s-scifi":   "/series?genero=ciencia-ficcion"
   };
 
   const path = paths[ref];
