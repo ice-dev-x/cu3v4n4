@@ -1,9 +1,110 @@
 const BASE_URL = "https://cuevana3k.pro";
+export const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+// ---------- LÍMITES DE TIEMPO Y CONFIGURACIÓN (NUEVO SDK v6) ----------
+export const LIMITS = {
+  fetchMs: 10000,
+  listFetchMs: 6000,
+  homeMs: 12000,
+  searchMs: 12500,
+  resolveMs: 60000,
+  breakerFails: 3,
+  breakerMs: 5 * 60 * 1000,
+};
+
+const SLEEP_STEP_MS = 250;
 
 function log(...args) {
   try { kino.log(...args); } catch { }
 }
 
+function configValue(key, fallback) {
+  try {
+    const v = kino.config.get(key);
+    return v === undefined || v === null || v === "" ? fallback : v;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+async function sleepFor(ms, cancel = null) {
+  let left = Math.max(0, Math.floor(ms));
+  while (left > 0 && !(cancel && cancel.done)) {
+    const step = Math.min(cancel ? SLEEP_STEP_MS : 5000, left);
+    await kino.sleep(step);
+    left -= step;
+  }
+}
+
+export async function within(p, ms, fallback = null) {
+  const guarded = Promise.resolve(p).then((v) => ({ v }), (e) => ({ e }));
+  if (ms <= 0) return fallback;
+  const cancel = { done: false };
+  const timer = sleepFor(ms, cancel).then(() => null, () => null);
+  try {
+    const r = await Promise.race([guarded, timer]);
+    if (!r) return fallback;
+    if (r.e) throw r.e;
+    return r.v;
+  } finally {
+    cancel.done = true;
+  }
+}
+
+// ---------- MANEJO DE SALUD Y PETICIONES HTTP RESILIENTES ----------
+function siteResting() {
+  try {
+    const h = kino.storage.get("cuevana_health");
+    return !!h && (h.until || 0) > Date.now();
+  } catch (_) {
+    return false;
+  }
+}
+
+function siteFailed(code) {
+  try {
+    const h = kino.storage.get("cuevana_health") || {};
+    const fails = (h.fails || 0) + 1;
+    if (fails >= LIMITS.breakerFails) {
+      log(`Cuevana: ${fails} fallas seguidas (${code}), pausando ${Math.round(LIMITS.breakerMs / 1000)}s`);
+      kino.storage.set("cuevana_health", { fails: 0, until: Date.now() + LIMITS.breakerMs }, LIMITS.breakerMs + 60000);
+    } else {
+      kino.storage.set("cuevana_health", { fails, until: h.until || 0 }, 3600 * 1000);
+    }
+  } catch (_) { }
+}
+
+function siteAnswered() {
+  try { kino.storage.remove("cuevana_health"); } catch (_) { }
+}
+
+async function siteFetch(url, init = {}, { list = false } = {}) {
+  if (list && siteResting()) {
+    throw kino.error("unavailable", "Cuevana en pausa tras varias fallas", {
+      userMessage: "Cuevana no está respondiendo. Se reintentará automáticamente en unos minutos."
+    });
+  }
+  const t0 = Date.now();
+  let r;
+  try {
+    r = await kino.fetch(url, {
+      ...init,
+      headers: { "User-Agent": UA, ...(init.headers || {}) },
+      timeoutMs: init.timeoutMs || (list ? LIMITS.listFetchMs : LIMITS.fetchMs)
+    });
+  } catch (e) {
+    log(`fetch error ${url}: ${e.code || ""} ${e.message} tras ${Date.now() - t0} ms`);
+    siteFailed(e.code || "network");
+    throw kino.error("unavailable", `Cuevana error: ${e.code || "network"}`, {
+      userMessage: "No se pudo contactar a Cuevana. Revisa tu conexión."
+    });
+  }
+  if (r.ok) siteAnswered();
+  else if (r.status >= 500 || r.status === 429) siteFailed(`http${r.status}`);
+  return r;
+}
+
+// ---------- FUNCIONES ORIGINALES INTACAS DE LIMPIEZA Y EXTRACCIÓN ----------
 function cleanText(text) {
   if (!text) return "";
   return text
@@ -79,62 +180,66 @@ function extractItems(html, limit = 20, isEpisode = false) {
   return items;
 }
 
+// ---------- HANDLERS DEL PLUGIN ADAPTADOS A SDK v6 ----------
+
 export async function home() {
   const fetchPage = async (path) => {
     try {
-      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      const res = await siteFetch(`${BASE_URL}${path}`, {}, { list: true });
       if (!res.ok) return "";
       return await res.text();
     } catch (e) { return ""; }
   };
 
-  // Secciones principales y géneros de películas
-  const htmlHome          = await fetchPage("/");
-  const htmlPeliculas     = await fetchPage("/peliculas");
-  const htmlSeries        = await fetchPage("/series");
-  const htmlPopulares     = await fetchPage("/tendencias");
-  const htmlAccion        = await fetchPage("/peliculas?genero=accion");
-  const htmlComedia       = await fetchPage("/peliculas?genero=comedia");
-  const htmlTerror        = await fetchPage("/peliculas?genero=terror");
-  const htmlAnimacion     = await fetchPage("/peliculas?genero=animacion");
-  const htmlAnime         = await fetchPage("/peliculas?genero=anime");
-  const htmlCienciaFiccion = await fetchPage("/peliculas?genero=ciencia-ficcion");
-  const htmlSuspenso      = await fetchPage("/peliculas?genero=suspenso");
-  const htmlDrama         = await fetchPage("/peliculas?genero=drama");
+  const loadHomeData = async () => {
+    const htmlHome           = await fetchPage("/");
+    const htmlPeliculas      = await fetchPage("/peliculas");
+    const htmlSeries         = await fetchPage("/series");
+    const htmlPopulares      = await fetchPage("/tendencias");
+    const htmlAccion         = await fetchPage("/peliculas?genero=accion");
+    const htmlComedia        = await fetchPage("/peliculas?genero=comedia");
+    const htmlTerror         = await fetchPage("/peliculas?genero=terror");
+    const htmlAnimacion      = await fetchPage("/peliculas?genero=animacion");
+    const htmlAnime          = await fetchPage("/peliculas?genero=anime");
+    const htmlCienciaFiccion  = await fetchPage("/peliculas?genero=ciencia-ficcion");
+    const htmlSuspenso       = await fetchPage("/peliculas?genero=suspenso");
+    const htmlDrama          = await fetchPage("/peliculas?genero=drama");
 
-  const estrenos         = extractItems(htmlHome, 20, false);
-  const ultimosEpisodios = extractItems(htmlHome, 20, true);
-  const peliculas        = extractItems(htmlPeliculas, 20, false);
-  const series           = extractItems(htmlSeries, 20, false);
-  const populares        = extractItems(htmlPopulares, 20, false);
-  
-  const accion           = extractItems(htmlAccion, 20, false);
-  const comedia          = extractItems(htmlComedia, 20, false);
-  const terror           = extractItems(htmlTerror, 20, false);
-  const animacion        = extractItems(htmlAnimacion, 20, false);
-  const anime            = extractItems(htmlAnime, 20, false);
-  const cienciaFic       = extractItems(htmlCienciaFiccion, 20, false);
-  const suspenso         = extractItems(htmlSuspenso, 20, false);
-  const drama            = extractItems(htmlDrama, 20, false);
+    const estrenos         = extractItems(htmlHome, 20, false);
+    const ultimosEpisodios = extractItems(htmlHome, 20, true);
+    const peliculas        = extractItems(htmlPeliculas, 20, false);
+    const series           = extractItems(htmlSeries, 20, false);
+    const populares        = extractItems(htmlPopulares, 20, false);
+    
+    const accion           = extractItems(htmlAccion, 20, false);
+    const comedia          = extractItems(htmlComedia, 20, false);
+    const terror           = extractItems(htmlTerror, 20, false);
+    const animacion        = extractItems(htmlAnimacion, 20, false);
+    const anime            = extractItems(htmlAnime, 20, false);
+    const cienciaFic       = extractItems(htmlCienciaFiccion, 20, false);
+    const suspenso         = extractItems(htmlSuspenso, 20, false);
+    const drama            = extractItems(htmlDrama, 20, false);
 
-  const categories = [];
-  
-  if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
-  if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
-  if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
-  if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
-  if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
-  
-  if (accion.length > 0)           categories.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
-  if (comedia.length > 0)          categories.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
-  if (terror.length > 0)           categories.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
-  if (animacion.length > 0)        categories.push({ id: "animacion", title: "🎨 Animación",           ref: "animacion", items: animacion });
-  if (anime.length > 0)            categories.push({ id: "anime",     title: "🎌 Anime",               ref: "anime",     items: anime });
-  if (cienciaFic.length > 0)       categories.push({ id: "sci-fi",    title: "🚀 Ciencia Ficción",     ref: "sci-fi",    items: cienciaFic });
-  if (suspenso.length > 0)         categories.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
-  if (drama.length > 0)            categories.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
+    const categories = [];
+    if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
+    if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
+    if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
+    if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
+    if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
+    
+    if (accion.length > 0)           categories.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
+    if (comedia.length > 0)          categories.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
+    if (terror.length > 0)           categories.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
+    if (animacion.length > 0)        categories.push({ id: "animacion", title: "🎨 Animación",           ref: "animacion", items: animacion });
+    if (anime.length > 0)            categories.push({ id: "anime",     title: "🎌 Anime",               ref: "anime",     items: anime });
+    if (cienciaFic.length > 0)       categories.push({ id: "sci-fi",    title: "🚀 Ciencia Ficción",     ref: "sci-fi",    items: cienciaFic });
+    if (suspenso.length > 0)         categories.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
+    if (drama.length > 0)            categories.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
-  return categories;
+    return categories;
+  };
+
+  return (await within(loadHomeData(), LIMITS.homeMs, [])) || [];
 }
 
 export async function browse(ref, cursor) {
@@ -157,16 +262,15 @@ export async function browse(ref, cursor) {
   };
 
   const path = paths[ref];
-  if (!path) throw kino.error("not_found", "esa fila ya no existe");
+  if (!path) throw kino.error("not_found", "Esa categoría no existe");
 
   const page = cursor ? Number(cursor) : 1;
-
   const url = page > 1
     ? `${BASE_URL}${path}${path.includes("?") ? "&" : "?"}page=${page}`
     : `${BASE_URL}${path}`;
 
-  const res = await kino.fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) throw kino.error("not_found", "no se pudo cargar la página");
+  const res = await siteFetch(url, {}, { list: true });
+  if (!res.ok) throw kino.error("unavailable", "No se pudo cargar la página de catálogo");
 
   const html = await res.text();
   const items = extractItems(html, 40, ref === "episodios");
@@ -178,46 +282,58 @@ export async function browse(ref, cursor) {
 }
 
 export async function search(query) {
-  const searchTerm = (query && query.q) ? encodeURIComponent(query.q) : "";
-  const res = await kino.fetch(`${BASE_URL}/explorar?s=${searchTerm}`, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) return [];
-  const html = await res.text();
-  const results = [];
-  const vistos = new Set();
-  const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  let match;
+  const qText = typeof query === "string" ? query : (query && query.q ? query.q : "");
+  const searchTerm = qText ? encodeURIComponent(qText) : "";
+  if (!searchTerm) return [];
 
-  while ((match = aRegex.exec(html)) !== null && results.length < 50) {
-    let link = match[1];
-    if (link.includes("episodio")) continue;
-    const innerHtml = match[2];
-    const imgMatch = innerHtml.match(/src=(?:"([^"]+)"|([^ >]+))/i);
-    const titleMatch = innerHtml.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i) || innerHtml.match(/alt="([^"]+)"/i);
-    const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
-    if (imgMatch && titleMatch && !vistos.has(link)) {
-      vistos.add(link);
-      let poster = imgMatch[1] || imgMatch[2];
-      if (poster.startsWith("//")) poster = "https:" + poster;
-      const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
-      const tmdbId = extractTmdbId(fullLink);
-      const item = {
-        id: "item-" + fullLink.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
-        ref: fullLink,
-        title: cleanText(titleMatch[1] || titleMatch[2]),
-        kind: link.includes("/serie/") ? "series" : "movie",
-        poster
-      };
-      if (yearMatch) item.year = parseInt(yearMatch[1], 10);
-      if (tmdbId) item.ids = { tmdb: tmdbId };
-      results.push(item);
+  const doSearch = async () => {
+    const res = await siteFetch(`${BASE_URL}/explorar?s=${searchTerm}`, {}, { list: true });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const results = [];
+    const vistos = new Set();
+    const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let match;
+
+    while ((match = aRegex.exec(html)) !== null && results.length < 50) {
+      let link = match[1];
+      if (link.includes("episodio")) continue;
+      const innerHtml = match[2];
+      const imgMatch = innerHtml.match(/src=(?:"([^"]+)"|([^ >]+))/i);
+      const titleMatch = innerHtml.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i) || innerHtml.match(/alt="([^"]+)"/i);
+      const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
+      if (imgMatch && titleMatch && !vistos.has(link)) {
+        vistos.add(link);
+        let poster = imgMatch[1] || imgMatch[2];
+        if (poster.startsWith("//")) poster = "https:" + poster;
+        const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
+        const tmdbId = extractTmdbId(fullLink);
+        const item = {
+          id: "item-" + fullLink.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
+          ref: fullLink,
+          title: cleanText(titleMatch[1] || titleMatch[2]),
+          kind: link.includes("/serie/") ? "series" : "movie",
+          poster
+        };
+        if (yearMatch) item.year = parseInt(yearMatch[1], 10);
+        if (tmdbId) item.ids = { tmdb: tmdbId };
+        results.push(item);
+      }
     }
-  }
-  return results;
+    return results;
+  };
+
+  return (await within(doSearch(), LIMITS.searchMs, [])) || [];
+}
+
+// Búsqueda por ámbito requerida por la API 6
+export async function scopedSearch(query, scope) {
+  return await search(query);
 }
 
 export async function episodes(ref) {
-  const res = await kino.fetch(ref, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) throw new Error("No se pudo obtener la serie");
+  const res = await siteFetch(ref);
+  if (!res.ok) throw kino.error("unavailable", "No se pudo obtener la información de la serie");
   const html = await res.text();
 
   const descMatch = html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
@@ -238,7 +354,7 @@ export async function episodes(ref) {
 
   if (seasonLinks.length > 0) {
     const seasonHtmls = await Promise.all(
-      seasonLinks.map(link => kino.fetch(link).then(r => r.ok ? r.text() : "").catch(() => ""))
+      seasonLinks.map(link => siteFetch(link).then(r => r.ok ? r.text() : "").catch(() => ""))
     );
     for (const sHtml of seasonHtmls) {
       if (!sHtml) continue;
@@ -316,8 +432,7 @@ export async function episodes(ref) {
 }
 
 export async function resolve(ref) {
-  await null;
-  try {
+  const resolveTask = async () => {
     let targetUrl = ref;
     let selectedServer = null;
     if (ref.includes("|||")) {
@@ -325,8 +440,8 @@ export async function resolve(ref) {
       targetUrl = parts[0];
       selectedServer = parts[1];
     }
-    const res1 = await kino.fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-    if (!res1.ok) throw new Error("Fallo al contactar el servidor principal");
+    const res1 = await siteFetch(targetUrl);
+    if (!res1.ok) throw kino.error("unavailable", "Fallo al contactar el servidor principal");
     const html1 = await res1.text();
     let dynamicKey = 'a45f04ce-2394-47c3-b718-0ecd97ce51d6';
     const keyMatch = html1.match(/["']([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']/i);
@@ -349,8 +464,8 @@ export async function resolve(ref) {
         if (url.includes("tungtungsahur")) cuevanaWrappers.push(url);
       }
     }
-    if (cuevanaWrappers.length === 0) throw new Error("No hay servidores disponibles");
-    const pref = kino.config.get("servidor_pref") ?? "3";
+    if (cuevanaWrappers.length === 0) throw kino.error("not_found", "No hay servidores disponibles");
+    const pref = configValue("servidor_pref", "3");
     if (pref !== "cualquiera") {
       cuevanaWrappers.sort((a, b) => {
         const indexA = (a.match(/token=([^&]+)/) || [])[1]?.[0];
@@ -380,7 +495,7 @@ export async function resolve(ref) {
           decrypted += String.fromCharCode(decoded.charCodeAt(i) ^ dynamicKey.charCodeAt(i % dynamicKey.length));
         }
         const iframeUrl = serversDict[serverIndex] + decrypted;
-        const res3 = await kino.fetch(iframeUrl, { headers: { "Referer": url, "User-Agent": "Mozilla/5.0" } });
+        const res3 = await siteFetch(iframeUrl, { headers: { "Referer": url } });
         if (!res3.ok) continue;
         const html3 = await res3.text();
         const originMatch = iframeUrl.match(/^(https?:\/\/[^\/]+)/i);
@@ -407,7 +522,7 @@ export async function resolve(ref) {
                   headers: { 
                     "Referer": iframeUrl, 
                     "Origin": originUrl, 
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+                    "User-Agent": UA, 
                     "Accept": "*/*" 
                   } 
                 };
@@ -427,7 +542,7 @@ export async function resolve(ref) {
                 headers: { 
                   "Referer": iframeUrl, 
                   "Origin": originUrl, 
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+                  "User-Agent": UA, 
                   "Accept": "*/*" 
                 } 
               };
@@ -436,8 +551,18 @@ export async function resolve(ref) {
         }
       } catch (innerError) { continue; }
     }
-    throw new Error("Se intentaron todos los servidores pero ninguno entregó el video.");
-  } catch (e) {
-    throw new Error(String(e));
+    throw kino.error("not_found", "Se intentaron todos los servidores pero ninguno entregó el video.");
+  };
+
+  return await within(resolveTask(), LIMITS.resolveMs);
+}
+
+// Acción para los botones de ajustes (Nuevo SDK v6)
+export async function onAction(actionKey) {
+  if (actionKey === "clear") {
+    try {
+      kino.storage.remove("cuevana_health");
+    } catch (_) {}
+    return { userMessage: "Se ha limpiado la caché local del plugin correctamente." };
   }
 }
