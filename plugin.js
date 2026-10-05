@@ -1,142 +1,9 @@
 const BASE_URL = "https://cuevana3k.pro";
-export const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-// ---------- COMPATIBILIDAD HÍBRIDA (Terminal + Kino SDK v6) ----------
-const isKino = typeof kino !== "undefined";
-
-const safeFetch = async (url, options = {}) => {
-  if (isKino && kino.fetch) {
-    return await kino.fetch(url, options);
-  }
-  // Fallback para pruebas en Consola / Node.js
-  const timeoutMs = options.timeoutMs || 10000;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(timer);
-    return res;
-  } catch (e) {
-    clearTimeout(timer);
-    throw e;
-  }
-};
-
-const safeStorage = {
-  get: (key) => {
-    if (isKino && kino.storage) try { return kino.storage.get(key); } catch (_) {}
-    return null;
-  },
-  set: (key, val, ttl) => {
-    if (isKino && kino.storage) try { kino.storage.set(key, val, ttl); } catch (_) {}
-  },
-  remove: (key) => {
-    if (isKino && kino.storage) try { kino.storage.remove(key); } catch (_) {}
-  }
-};
-
-const safeConfig = (key, fallback) => {
-  if (isKino && kino.config) {
-    try {
-      const v = kino.config.get(key);
-      return (v === undefined || v === null || v === "") ? fallback : v;
-    } catch (_) {}
-  }
-  return fallback;
-};
-
-const safeError = (code, msg) => {
-  if (isKino && kino.error) return kino.error(code, msg);
-  const err = new Error(`[${code}] ${msg}`);
-  err.code = code;
-  return err;
-};
-
-const safeSleep = (ms) => {
-  if (isKino && kino.sleep) return kino.sleep(ms);
-  return new Promise((r) => setTimeout(r, ms));
-};
-
-const safeLog = (...args) => {
-  if (isKino && kino.log) try { kino.log(...args); } catch (_) {}
-  else console.log("[LOG]", ...args);
-};
-
-// ---------- LÍMITES Y MANEJO DE PETICIONES ----------
-export const LIMITS = {
-  fetchMs: 10000,
-  listFetchMs: 6000,
-  homeMs: 12000,
-  searchMs: 12500,
-  resolveMs: 60000,
-  breakerFails: 3,
-  breakerMs: 5 * 60 * 1000,
-};
-
-async function sleepFor(ms, cancel = null) {
-  let left = Math.max(0, Math.floor(ms));
-  while (left > 0 && !(cancel && cancel.done)) {
-    const step = Math.min(cancel ? 250 : 5000, left);
-    await safeSleep(step);
-    left -= step;
-  }
+function log(...args) {
+  try { kino.log(...args); } catch { }
 }
 
-export async function within(p, ms, fallback = null) {
-  const guarded = Promise.resolve(p).then((v) => ({ v }), (e) => ({ e }));
-  if (ms <= 0) return fallback;
-  const cancel = { done: false };
-  const timer = sleepFor(ms, cancel).then(() => null, () => null);
-  try {
-    const r = await Promise.race([guarded, timer]);
-    if (!r) return fallback;
-    if (r.e) throw r.e;
-    return r.v;
-  } finally {
-    cancel.done = true;
-  }
-}
-
-function siteResting() {
-  const h = safeStorage.get("cuevana_health");
-  return !!h && (h.until || 0) > Date.now();
-}
-
-function siteFailed(code) {
-  const h = safeStorage.get("cuevana_health") || {};
-  const fails = (h.fails || 0) + 1;
-  if (fails >= LIMITS.breakerFails) {
-    safeLog(`Cuevana: ${fails} fallas seguidas (${code})`);
-    safeStorage.set("cuevana_health", { fails: 0, until: Date.now() + LIMITS.breakerMs }, LIMITS.breakerMs + 60000);
-  } else {
-    safeStorage.set("cuevana_health", { fails, until: h.until || 0 }, 3600 * 1000);
-  }
-}
-
-function siteAnswered() {
-  safeStorage.remove("cuevana_health");
-}
-
-async function siteFetch(url, init = {}, { list = false } = {}) {
-  if (list && siteResting()) {
-    throw safeError("unavailable", "Cuevana en pausa tras varias fallas");
-  }
-  try {
-    const r = await safeFetch(url, {
-      ...init,
-      headers: { "User-Agent": UA, ...(init.headers || {}) },
-      timeoutMs: init.timeoutMs || (list ? LIMITS.listFetchMs : LIMITS.fetchMs)
-    });
-    if (r.ok) siteAnswered();
-    else if (r.status >= 500 || r.status === 429) siteFailed(`http${r.status}`);
-    return r;
-  } catch (e) {
-    siteFailed(e.code || "network");
-    throw safeError("unavailable", `Cuevana error: ${e.code || "network"}`);
-  }
-}
-
-// ---------- FUNCIONES AUXILIARES DE SCRAPING ----------
 function cleanText(text) {
   if (!text) return "";
   return text
@@ -212,86 +79,245 @@ function extractItems(html, limit = 20, isEpisode = false) {
   return items;
 }
 
-// ---------- HANDLERS EXPORTADOS ----------
 export async function home() {
   const fetchPage = async (path) => {
     try {
-      const res = await siteFetch(`${BASE_URL}${path}`, {}, { list: true });
+      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
       if (!res.ok) return "";
       return await res.text();
     } catch (e) { return ""; }
   };
 
-  const loadHomeData = async () => {
-    const htmlHome      = await fetchPage("/");
-    const htmlPeliculas = await fetchPage("/peliculas");
-    const htmlSeries    = await fetchPage("/series");
+  // Secciones principales y géneros de películas
+  const htmlHome          = await fetchPage("/");
+  const htmlPeliculas     = await fetchPage("/peliculas");
+  const htmlSeries        = await fetchPage("/series");
+  const htmlPopulares     = await fetchPage("/tendencias");
+  const htmlAccion        = await fetchPage("/peliculas?genero=accion");
+  const htmlComedia       = await fetchPage("/peliculas?genero=comedia");
+  const htmlTerror        = await fetchPage("/peliculas?genero=terror");
+  const htmlAnimacion     = await fetchPage("/peliculas?genero=animacion");
+  const htmlAnime         = await fetchPage("/peliculas?genero=anime");
+  const htmlCienciaFiccion = await fetchPage("/peliculas?genero=ciencia-ficcion");
+  const htmlSuspenso      = await fetchPage("/peliculas?genero=suspenso");
+  const htmlDrama         = await fetchPage("/peliculas?genero=drama");
 
-    const estrenos  = extractItems(htmlHome, 20, false);
-    const peliculas = extractItems(htmlPeliculas, 20, false);
-    const series    = extractItems(htmlSeries, 20, false);
+  const estrenos         = extractItems(htmlHome, 20, false);
+  const ultimosEpisodios = extractItems(htmlHome, 20, true);
+  const peliculas        = extractItems(htmlPeliculas, 20, false);
+  const series           = extractItems(htmlSeries, 20, false);
+  const populares        = extractItems(htmlPopulares, 20, false);
+  
+  const accion           = extractItems(htmlAccion, 20, false);
+  const comedia          = extractItems(htmlComedia, 20, false);
+  const terror           = extractItems(htmlTerror, 20, false);
+  const animacion        = extractItems(htmlAnimacion, 20, false);
+  const anime            = extractItems(htmlAnime, 20, false);
+  const cienciaFic       = extractItems(htmlCienciaFiccion, 20, false);
+  const suspenso         = extractItems(htmlSuspenso, 20, false);
+  const drama            = extractItems(htmlDrama, 20, false);
 
-    const categories = [];
-    if (estrenos.length > 0)  categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
-    if (peliculas.length > 0) categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
-    if (series.length > 0)    categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
+  const categories = [];
+  
+  if (estrenos.length > 0)         categories.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
+  if (ultimosEpisodios.length > 0) categories.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: ultimosEpisodios });
+  if (populares.length > 0)        categories.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
+  if (peliculas.length > 0)        categories.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
+  if (series.length > 0)           categories.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
+  
+  if (accion.length > 0)           categories.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
+  if (comedia.length > 0)          categories.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
+  if (terror.length > 0)           categories.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
+  if (animacion.length > 0)        categories.push({ id: "animacion", title: "🎨 Animación",           ref: "animacion", items: animacion });
+  if (anime.length > 0)            categories.push({ id: "anime",     title: "🎌 Anime",               ref: "anime",     items: anime });
+  if (cienciaFic.length > 0)       categories.push({ id: "sci-fi",    title: "🚀 Ciencia Ficción",     ref: "sci-fi",    items: cienciaFic });
+  if (suspenso.length > 0)         categories.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
+  if (drama.length > 0)            categories.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
-    return categories;
-  };
-
-  return (await within(loadHomeData(), LIMITS.homeMs, [])) || [];
+  return categories;
 }
 
 export async function browse(ref, cursor) {
+  await null;
+
   const paths = {
     "estrenos":  "/",
+    "episodios": "/",
+    "populares": "/tendencias",
     "peliculas": "/peliculas",
-    "series":    "/series"
+    "series":    "/series",
+    "accion":    "/peliculas?genero=accion",
+    "comedia":   "/peliculas?genero=comedia",
+    "terror":    "/peliculas?genero=terror",
+    "animacion": "/peliculas?genero=animacion",
+    "anime":     "/peliculas?genero=anime",
+    "sci-fi":    "/peliculas?genero=ciencia-ficcion",
+    "suspenso":  "/peliculas?genero=suspenso",
+    "drama":     "/peliculas?genero=drama"
   };
 
   const path = paths[ref];
-  if (!path) throw safeError("not_found", "Esa categoría no existe");
+  if (!path) throw kino.error("not_found", "esa fila ya no existe");
 
   const page = cursor ? Number(cursor) : 1;
-  const url = page > 1 ? `${BASE_URL}${path}?page=${page}` : `${BASE_URL}${path}`;
 
-  const res = await siteFetch(url, {}, { list: true });
-  if (!res.ok) throw safeError("unavailable", "No se pudo cargar el catálogo");
+  const url = page > 1
+    ? `${BASE_URL}${path}${path.includes("?") ? "&" : "?"}page=${page}`
+    : `${BASE_URL}${path}`;
+
+  const res = await kino.fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw kino.error("not_found", "no se pudo cargar la página");
 
   const html = await res.text();
-  const items = extractItems(html, 40, false);
+  const items = extractItems(html, 40, ref === "episodios");
 
-  return { items, next: items.length >= 10 ? String(page + 1) : undefined };
+  return {
+    items,
+    next: items.length >= 10 ? String(page + 1) : undefined
+  };
 }
 
 export async function search(query) {
-  const qText = typeof query === "string" ? query : (query && query.q ? query.q : "");
-  const searchTerm = qText ? encodeURIComponent(qText) : "";
-  if (!searchTerm) return [];
+  const searchTerm = (query && query.q) ? encodeURIComponent(query.q) : "";
+  const res = await kino.fetch(`${BASE_URL}/explorar?s=${searchTerm}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const results = [];
+  const vistos = new Set();
+  const aRegex = /<a[^>]+href="([^"]+(?:\/pelicula\/|\/serie\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
 
-  const doSearch = async () => {
-    const res = await siteFetch(`${BASE_URL}/explorar?s=${searchTerm}`, {}, { list: true });
-    if (!res.ok) return [];
-    const html = await res.text();
-    return extractItems(html, 50, false);
-  };
-
-  return (await within(doSearch(), LIMITS.searchMs, [])) || [];
-}
-
-export async function scopedSearch(query, scope) {
-  return await search(query);
+  while ((match = aRegex.exec(html)) !== null && results.length < 50) {
+    let link = match[1];
+    if (link.includes("episodio")) continue;
+    const innerHtml = match[2];
+    const imgMatch = innerHtml.match(/src=(?:"([^"]+)"|([^ >]+))/i);
+    const titleMatch = innerHtml.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i) || innerHtml.match(/alt="([^"]+)"/i);
+    const yearMatch = innerHtml.match(/<span class="Year">(\d+)<\/span>/i);
+    if (imgMatch && titleMatch && !vistos.has(link)) {
+      vistos.add(link);
+      let poster = imgMatch[1] || imgMatch[2];
+      if (poster.startsWith("//")) poster = "https:" + poster;
+      const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
+      const tmdbId = extractTmdbId(fullLink);
+      const item = {
+        id: "item-" + fullLink.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
+        ref: fullLink,
+        title: cleanText(titleMatch[1] || titleMatch[2]),
+        kind: link.includes("/serie/") ? "series" : "movie",
+        poster
+      };
+      if (yearMatch) item.year = parseInt(yearMatch[1], 10);
+      if (tmdbId) item.ids = { tmdb: tmdbId };
+      results.push(item);
+    }
+  }
+  return results;
 }
 
 export async function episodes(ref) {
-  const res = await siteFetch(ref);
-  if (!res.ok) throw safeError("unavailable", "No se pudo obtener información");
+  const res = await kino.fetch(ref, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error("No se pudo obtener la serie");
   const html = await res.text();
-  return { episodes: extractItems(html, 50, true) };
+
+  const descMatch = html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
+  const overview = descMatch ? cleanText(descMatch[1]) : "";
+  const tmdbId = extractTmdbId(ref);
+
+  const seasonRegex = /<a[^>]+href="([^"]+\/temporada-\d+)"/gi;
+  const seasonLinks = [];
+  let sMatch;
+  while ((sMatch = seasonRegex.exec(html)) !== null) {
+    let sLink = sMatch[1];
+    if (!sLink.startsWith("http")) sLink = BASE_URL + sLink;
+    if (!seasonLinks.includes(sLink)) seasonLinks.push(sLink);
+  }
+
+  const episodesList = [];
+  const vistos = new Set();
+
+  if (seasonLinks.length > 0) {
+    const seasonHtmls = await Promise.all(
+      seasonLinks.map(link => kino.fetch(link).then(r => r.ok ? r.text() : "").catch(() => ""))
+    );
+    for (const sHtml of seasonHtmls) {
+      if (!sHtml) continue;
+      const epRegex = /<a[^>]+href="([^"]+\/episodio-\d+x\d+)"[^>]*>([\s\S]*?)<\/a>/gi;
+      let epMatch;
+      while ((epMatch = epRegex.exec(sHtml)) !== null) {
+        let epRef = epMatch[1];
+        if (!epRef.startsWith("http")) epRef = BASE_URL + epRef;
+        if (vistos.has(epRef)) continue;
+        vistos.add(epRef);
+        let season = 1, number = 1;
+        const numMatch = epRef.match(/episodio-(\d+)x(\d+)/i);
+        if (numMatch) {
+          season = parseInt(numMatch[1], 10);
+          number = parseInt(numMatch[2], 10);
+        }
+        const titleMatch = epMatch[2].match(/<span[^>]*>([^<]+)<\/span>/i) || epMatch[2].match(/alt="([^"]+)"/i);
+        const imgMatch = epMatch[2].match(/src=(?:"([^"]+)"|([^ >]+))/i);
+        let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
+        if (still && still.startsWith("//")) still = "https:" + still;
+        const epObj = { season, number, ref: epRef, title: titleMatch ? cleanText(titleMatch[1]) : `Episodio ${number}` };
+        if (still) epObj.still = still;
+        episodesList.push(epObj);
+      }
+    }
+  }
+
+  if (episodesList.length === 0) {
+    let count = 1;
+    const urlsVistas = new Set();
+    let foundServers = false;
+    const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
+    let cMatch;
+    while ((cMatch = containerRegex.exec(html)) !== null) {
+      const langName = cleanText(cMatch[2]);
+      const serversHtml = cMatch[3];
+      const serverRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
+      let serverMatch;
+      while ((serverMatch = serverRegex.exec(serversHtml)) !== null) {
+        const serverUrl = serverMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
+        foundServers = true;
+        const rawInner = serverMatch[2];
+        const nameMatch = rawInner.match(/<span[^>]*>([^<]+)<\/span>/i);
+        let serverName = nameMatch ? cleanText(nameMatch[1]) : `Servidor ${count}`;
+        if (!serverName || serverName.length < 2) serverName = `Servidor ${count}`;
+        episodesList.push({ season: 1, number: count, ref: `${ref}|||${serverUrl}`, title: `${langName} - ${serverName}` });
+        count++;
+      }
+    }
+    if (!foundServers) {
+      const fallbackRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
+      let fMatch;
+      while ((fMatch = fallbackRegex.exec(html)) !== null) {
+        const serverUrl = fMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
+        episodesList.push({ season: 1, number: count, ref: `${ref}|||${serverUrl}`, title: `Opción ${count}` });
+        count++;
+      }
+    }
+    if (episodesList.length === 0) {
+      episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
+    }
+  }
+
+  episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
+  const result = { episodes: episodesList };
+  const seriesInfo = {};
+  if (overview) seriesInfo.overview = overview;
+  if (tmdbId) seriesInfo.ids = { tmdb: tmdbId };
+  if (Object.keys(seriesInfo).length > 0) result.series = seriesInfo;
+  return result;
 }
 
 export async function resolve(ref) {
-  const resolveTask = async () => {
+  await null;
+  try {
     let targetUrl = ref;
     let selectedServer = null;
     if (ref.includes("|||")) {
@@ -299,8 +325,8 @@ export async function resolve(ref) {
       targetUrl = parts[0];
       selectedServer = parts[1];
     }
-    const res1 = await siteFetch(targetUrl);
-    if (!res1.ok) throw safeError("unavailable", "Fallo al contactar el servidor principal");
+    const res1 = await kino.fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res1.ok) throw new Error("Fallo al contactar el servidor principal");
     const html1 = await res1.text();
     let dynamicKey = 'a45f04ce-2394-47c3-b718-0ecd97ce51d6';
     const keyMatch = html1.match(/["']([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']/i);
@@ -313,16 +339,27 @@ export async function resolve(ref) {
       cuevanaWrappers.push(url);
     } else {
       const serverRegex = /data-server="([^"]+)"/g;
+      const servers = [];
       let match;
-      while ((match = serverRegex.exec(html1)) !== null) {
-        let url = match[1];
-        if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
+      while ((match = serverRegex.exec(html1)) !== null) servers.push(match[1]);
+      for (const s of servers) {
+        let url = s;
+        if (s.includes("?v=")) { try { url = base64Decode(s.split("?v=")[1]); } catch(e) {} }
         if (url.startsWith("//")) url = "https:" + url;
         if (url.includes("tungtungsahur")) cuevanaWrappers.push(url);
       }
     }
-    if (cuevanaWrappers.length === 0) throw safeError("not_found", "No hay servidores disponibles");
-
+    if (cuevanaWrappers.length === 0) throw new Error("No hay servidores disponibles");
+    const pref = kino.config.get("servidor_pref") ?? "3";
+    if (pref !== "cualquiera") {
+      cuevanaWrappers.sort((a, b) => {
+        const indexA = (a.match(/token=([^&]+)/) || [])[1]?.[0];
+        const indexB = (b.match(/token=([^&]+)/) || [])[1]?.[0];
+        if (indexA === pref) return -1;
+        if (indexB === pref) return 1;
+        return 0;
+      });
+    }
     for (const url of cuevanaWrappers) {
       try {
         const tokenMatch = url.match(/token=([^&]+)/);
@@ -343,7 +380,7 @@ export async function resolve(ref) {
           decrypted += String.fromCharCode(decoded.charCodeAt(i) ^ dynamicKey.charCodeAt(i % dynamicKey.length));
         }
         const iframeUrl = serversDict[serverIndex] + decrypted;
-        const res3 = await siteFetch(iframeUrl, { headers: { "Referer": url } });
+        const res3 = await kino.fetch(iframeUrl, { headers: { "Referer": url, "User-Agent": "Mozilla/5.0" } });
         if (!res3.ok) continue;
         const html3 = await res3.text();
         const originMatch = iframeUrl.match(/^(https?:\/\/[^\/]+)/i);
@@ -362,39 +399,45 @@ export async function resolve(ref) {
                 unpackedCode.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
               if (streamFinal) {
                 let streamUrl = streamFinal[1] || streamFinal[0];
-                return { url: streamUrl, headers: { "Referer": iframeUrl, "Origin": originUrl, "User-Agent": UA } };
+                if (streamUrl.includes('.urlset/master.m3u8')) {
+                  streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
+                }
+                return { 
+                  url: streamUrl, 
+                  headers: { 
+                    "Referer": iframeUrl, 
+                    "Origin": originUrl, 
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+                    "Accept": "*/*" 
+                  } 
+                };
               }
+            }
+          } else {
+            const streamFinal =
+              html3.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
+              html3.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+            if (streamFinal) {
+              let streamUrl = streamFinal[1] || streamFinal[0];
+              if (streamUrl.includes('.urlset/master.m3u8')) {
+                streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
+              }
+              return { 
+                url: streamUrl, 
+                headers: { 
+                  "Referer": iframeUrl, 
+                  "Origin": originUrl, 
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+                  "Accept": "*/*" 
+                } 
+              };
             }
           }
         }
       } catch (innerError) { continue; }
     }
-    throw safeError("not_found", "No se pudo resolver el stream");
-  };
-
-  return await within(resolveTask(), LIMITS.resolveMs);
-}
-
-// ---------- HANDLERS DE CONFIGURACIÓN ----------
-// ---------- HANDLERS DE CONFIGURACIÓN Y ESTADO (SDK v6) ----------
-
-export async function settingStatus(key) {
-  if (key === "state") {
-    return {
-      label: siteResting() ? "Pausado (Reintentando pronto)" : "Operativo",
-      value: siteResting() ? "degraded" : "ok"
-    };
+    throw new Error("Se intentaron todos los servidores pero ninguno entregó el video.");
+  } catch (e) {
+    throw new Error(String(e));
   }
-  return null;
 }
-
-export async function action(key) {
-  if (key === "clear") {
-    safeStorage.remove("cuevana_health");
-    return { userMessage: "Memoria temporal borrada correctamente." };
-  }
-  return null;
-}
-
-// Alias para compatibilidad con el runtime de Kino sin redeclarar variables
-export { settingStatus as onSettingStatus, action as onAction };

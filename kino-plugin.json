@@ -1,11 +1,12 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.4.5",
-  "apiVersion": 6,
+  "version": "2.4.6",
+  "apiVersion": 4,
   "entry": "plugin.js",
-  "description": "Películas y series en español",
+  "description": "Películas",
   "author": "ice-dev-x",
+  "streamHosts": "any",
   "hosts": [
     "cuevana3k.pro",
     "*.cuevana3k.pro",
@@ -28,60 +29,24 @@
   ],
   "capabilities": [
     "search",
-    "scopedSearch",
     "home",
     "browse",
     "episodes",
     "resolve"
   ],
-  "categories": [
-    "movies",
-    "series"
-  ],
-  "streamHosts": "any",
-  "discoverable": true,
-  "debug": false,
-  "color": "#035453",
-  "theme": {
-    "accent": "#035453",
-    "onAccent": "#FFFFFF",
-    "background": "#0B1613",
-    "surface": "#14302A",
-    "highlight": "#F2C14E"
-  },
   "settings": [
-    {
-      "key": "playback",
-      "label": "Reproducción",
-      "type": "section"
-    },
-    {
-      "key": "servidor_pref",
-      "label": "Servidor preferido",
-      "type": "select",
-      "default": "3",
-      "options": [
-        { "value": "1", "label": "Hyper" },
-        { "value": "3", "label": "Nebula" },
-        { "value": "cualquiera", "label": "Automático" }
-      ]
-    },
-    {
-      "key": "tools",
-      "label": "Estado y Herramientas",
-      "type": "section"
-    },
-    {
-      "key": "state",
-      "label": "Estado del servidor",
-      "type": "status"
-    },
-    {
-      "key": "clear",
-      "label": "Borrar datos guardados",
-      "type": "action",
-      "confirm": "¿Deseas borrar la memoria temporal del plugin?"
-    }
-  ],
+  {
+    "key": "servidor_pref",
+    "label": "Servidor preferido",
+    "type": "select",
+    "default": "3",
+    "options": [
+      { "value": "1", "label": "Hyper" },
+      { "value": "3", "label": "Nebula" },
+      { "value": "cualquiera", "label": "Automático" }
+    ]
+  }
+],
+  "color": "#035453",
   "icon": "icon.png"
 }
