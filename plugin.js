@@ -376,19 +376,25 @@ export async function resolve(ref) {
 }
 
 // ---------- HANDLERS DE CONFIGURACIÓN ----------
+// ---------- HANDLERS DE CONFIGURACIÓN Y ESTADO (SDK v6) ----------
+
 export async function settingStatus(key) {
   if (key === "state") {
-    return { label: siteResting() ? "Pausado" : "Operativo", value: siteResting() ? "degraded" : "ok" };
+    return {
+      label: siteResting() ? "Pausado (Reintentando pronto)" : "Operativo",
+      value: siteResting() ? "degraded" : "ok"
+    };
   }
   return null;
 }
-export const onSettingStatus = settingStatus;
 
 export async function action(key) {
   if (key === "clear") {
     safeStorage.remove("cuevana_health");
-    return { userMessage: "Memoria temporal borrada" };
+    return { userMessage: "Memoria temporal borrada correctamente." };
   }
   return null;
 }
-export const onAction = action;
+
+// Alias para compatibilidad con el runtime de Kino sin redeclarar variables
+export { settingStatus as onSettingStatus, action as onAction };
