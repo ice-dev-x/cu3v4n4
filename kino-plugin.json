@@ -1,7 +1,7 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Películas y series en español",
