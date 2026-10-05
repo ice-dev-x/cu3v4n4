@@ -1,6 +1,40 @@
 const BASE_URL = "https://cuevana3k.pro";
 export const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+// ---------- HANDLERS DE CONFIGURACIÓN Y ESTADO (SDK v6) ----------
+
+/**
+ * Devuelve el estado actual para las entradas de tipo "status" en settings.
+ */
+export async function settingStatus(key) {
+  if (key === "state") {
+    const isResting = siteResting();
+    return {
+      label: isResting ? "Pausado (Reintentando pronto)" : "Operativo",
+      value: isResting ? "degraded" : "ok"
+    };
+  }
+  return null;
+}
+
+// Alias de compatibilidad según la versión del loader
+export const onSettingStatus = settingStatus;
+
+/**
+ * Ejecuta las acciones disparadas por botones de tipo "action" en settings.
+ */
+export async function action(key) {
+  if (key === "clear") {
+    try {
+      kino.storage.remove("cuevana_health");
+    } catch (_) {}
+    return { userMessage: "Se ha limpiado la caché y el estado del plugin correctamente." };
+  }
+  return null;
+}
+
+// Alias de compatibilidad con ejecutores onAction
+export const onAction = action;
 // ---------- LÍMITES DE TIEMPO Y CONFIGURACIÓN (NUEVO SDK v6) ----------
 export const LIMITS = {
   fetchMs: 10000,
