@@ -342,12 +342,11 @@ export async function search(query) {
 }
 
 export async function episodes(ref) {
-  const res = await kino.fetch(ref, { headers: { "User-Agent": UA } });
-  if (!res.ok) throw new Error("No se pudo obtener el contenido");
+  const res = await kino.fetch(ref, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error("No se pudo obtener la serie");
   const html = await res.text();
 
-  // Buscamos la sinopsis exacta en el HTML de Cuevana
-  const descMatch = html.match(/class="Description"[^>]*>\s*<p[^>]*>([\s\S]*?)<\/p>/i) || html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
+  const descMatch = html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
   const overview = descMatch ? cleanText(descMatch[1]) : "";
   const tmdbId = extractTmdbId(ref);
 
@@ -355,6 +354,7 @@ export async function episodes(ref) {
   const seasonLinks = [];
   let sMatch;
   while ((sMatch = seasonRegex.exec(html)) !== null) {
+
     let sLink = sMatch[1];
     if (!sLink.startsWith("http")) sLink = BASE_URL + sLink;
     if (!seasonLinks.includes(sLink)) seasonLinks.push(sLink);
@@ -373,56 +373,75 @@ export async function episodes(ref) {
       let epMatch;
       while ((epMatch = epRegex.exec(sHtml)) !== null) {
         
+        //if (episodesList.length === 0) throw new Error(epMatch[2].substring(0, 500)); // DEBUG
+        
         let epRef = epMatch[1];
         if (!epRef.startsWith("http")) epRef = BASE_URL + epRef;
         if (vistos.has(epRef)) continue;
         vistos.add(epRef);
-        
         let season = 1, number = 1;
         const numMatch = epRef.match(/episodio-(\d+)x(\d+)/i);
         if (numMatch) {
           season = parseInt(numMatch[1], 10);
           number = parseInt(numMatch[2], 10);
         }
-        
         const titleMatch = epMatch[2].match(/<span[^>]*>([^<]+)<\/span>/i) || epMatch[2].match(/alt="([^"]+)"/i);
-        const imgMatch = epMatch[2].match(/src=(?:"([^"]+)"|([^ >]+))/i);
-        
-        let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
-        if (still && still.startsWith("//")) still = "https:" + still;
-        
-        const epObj = { season, number, ref: epRef, title: titleMatch ? cleanText(titleMatch[1] || titleMatch[2]) : `Episodio ${number}` };
-        if (still) epObj.still = still;
-        episodesList.push(epObj);
+       const imgMatch = epMatch[2].match(/src=(?:"([^"]+)"|([^ >]+))/i);
+let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
+if (still && still.startsWith("//")) still = "https:" + still;
+const epObj = { season, number, ref: epRef, title: `Episodio ${number}` };
+if (still) epObj.still = still;
+episodesList.push(epObj);
       }
     }
   }
 
-  // Si la lista está vacía, es una película. Enviamos un solo botón de reproducción limpio.
   if (episodesList.length === 0) {
-    episodesList.push({ 
-      season: 1, 
-      number: 1, 
-      ref: ref, 
-      title: "Reproducir Película" 
-    });
+    let count = 1;
+    const urlsVistas = new Set();
+    let foundServers = false;
+    const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
+    let cMatch;
+    while ((cMatch = containerRegex.exec(html)) !== null) {
+      const langName = cleanText(cMatch[2]);
+      const serversHtml = cMatch[3];
+      const serverRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
+      let serverMatch;
+      while ((serverMatch = serverRegex.exec(serversHtml)) !== null) {
+        const serverUrl = serverMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
+        foundServers = true;
+        const rawInner = serverMatch[2];
+        const nameMatch = rawInner.match(/<span[^>]*>([^<]+)<\/span>/i);
+        let serverName = nameMatch ? cleanText(nameMatch[1]) : `Servidor ${count}`;
+        if (!serverName || serverName.length < 2) serverName = `Servidor ${count}`;
+        episodesList.push({ season: 1, number: count, ref: `${ref}|||${serverUrl}`, title: `${langName} - ${serverName}` });
+        count++;
+      }
+    }
+    if (!foundServers) {
+      const fallbackRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
+      let fMatch;
+      while ((fMatch = fallbackRegex.exec(html)) !== null) {
+        const serverUrl = fMatch[1];
+        if (urlsVistas.has(serverUrl)) continue;
+        urlsVistas.add(serverUrl);
+        episodesList.push({ season: 1, number: count, ref: `${ref}|||${serverUrl}`, title: `Opción ${count}` });
+        count++;
+      }
+    }
+    if (episodesList.length === 0) {
+      episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
+    }
   }
 
   episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
-  
   const result = { episodes: episodesList };
-  
-  // Integramos la metadata (Sinopsis y TMDB ID)
-  const metadata = {};
-  if (overview) metadata.overview = overview;
-  if (tmdbId) metadata.ids = { tmdb: tmdbId };
-  
-  if (Object.keys(metadata).length > 0) {
-    // Le avisamos a Kino si es serie o película para que acomode bien el texto
-    if (ref.includes("/serie/")) result.series = metadata;
-    else result.movie = metadata;
-  }
-  
+  const seriesInfo = {};
+  if (overview) seriesInfo.overview = overview;
+  if (tmdbId) seriesInfo.ids = { tmdb: tmdbId };
+  if (Object.keys(seriesInfo).length > 0) result.series = seriesInfo;
   return result;
 }
 
