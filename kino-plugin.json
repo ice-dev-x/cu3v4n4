@@ -1,8 +1,8 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.5.1",
-  "apiVersion": 4,
+  "version": "2.5.2",
+  "apiVersion": 6,
   "entry": "plugin.js",
   "description": "Películas y series en español y latino",
   "author": "ice-dev-x",
