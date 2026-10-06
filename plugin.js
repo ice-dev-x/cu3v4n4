@@ -1,3 +1,4 @@
+export const UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36";
 const BASE_URL = "https://cuevana3k.pro";
 
 function log(...args) {
@@ -37,15 +38,19 @@ export async function section({ tab }) {
   const rows = [];
 
   if (chosen === "pelis") {
-    // Peticiones simultáneas para mayor velocidad
-    const [
-      htmlPopulares, htmlPeliculas, htmlEstrenos,
-      htmlAccion, htmlComedia, htmlTerror, htmlAnimacion,
-      htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama
-    ] = await Promise.all([
-      fetchPage("/tendencias"), fetchPage("/peliculas"), fetchPage("/"),
+    // Lote 1: Lo principal (Home, Tendencias, Películas)
+    const [htmlPopulares, htmlPeliculas, htmlEstrenos] = await Promise.all([
+      fetchPage("/tendencias"), fetchPage("/peliculas"), fetchPage("/")
+    ]);
+
+    // Lote 2: Primer grupo de géneros
+    const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
       fetchPage("/peliculas?genero=accion"), fetchPage("/peliculas?genero=comedia"),
-      fetchPage("/peliculas?genero=terror"), fetchPage("/peliculas?genero=animacion"),
+      fetchPage("/peliculas?genero=terror"), fetchPage("/peliculas?genero=animacion")
+    ]);
+
+    // Lote 3: Segundo grupo de géneros
+    const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
       fetchPage("/peliculas?genero=anime"), fetchPage("/peliculas?genero=ciencia-ficcion"),
       fetchPage("/peliculas?genero=suspenso"), fetchPage("/peliculas?genero=drama")
     ]);
@@ -78,15 +83,19 @@ export async function section({ tab }) {
     if (drama.length > 0)     rows.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
   } else if (chosen === "series") {
-    // Adaptamos las URL para extraer los géneros específicos de series
-    const [
-      htmlSeries, htmlHome,
-      htmlAccion, htmlComedia, htmlTerror, htmlAnimacion,
-      htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama
-    ] = await Promise.all([
-      fetchPage("/series"), fetchPage("/"),
+    // Lote 1: Series principales
+    const [htmlSeries, htmlHome] = await Promise.all([
+      fetchPage("/series"), fetchPage("/")
+    ]);
+
+    // Lote 2: Primer grupo de géneros de series
+    const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
       fetchPage("/series?genero=accion"), fetchPage("/series?genero=comedia"),
-      fetchPage("/series?genero=terror"), fetchPage("/series?genero=animacion"),
+      fetchPage("/series?genero=terror"), fetchPage("/series?genero=animacion")
+    ]);
+
+    // Lote 3: Segundo grupo de géneros de series
+    const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
       fetchPage("/series?genero=anime"), fetchPage("/series?genero=ciencia-ficcion"),
       fetchPage("/series?genero=suspenso"), fetchPage("/series?genero=drama")
     ]);
@@ -107,7 +116,6 @@ export async function section({ tab }) {
 
     if (series.length > 0)     rows.push({ id: "series",     title: "📺 Series Actualizadas",  ref: "series",     items: series });
     if (episodios.length > 0)  rows.push({ id: "episodios",  title: "🆕 Últimos Episodios",    ref: "episodios",  items: episodios });
-    // Usamos el prefijo "s-" en el ref para diferenciarlas de las películas al usar el botón "Ver más"
     if (accion.length > 0)     rows.push({ id: "s-accion",   title: "💥 Acción",              ref: "s-accion",   items: accion });
     if (comedia.length > 0)    rows.push({ id: "s-comedia",  title: "😂 Comedia",             ref: "s-comedia",  items: comedia });
     if (terror.length > 0)     rows.push({ id: "s-terror",   title: "👻 Terror",              ref: "s-terror",   items: terror });
@@ -117,7 +125,7 @@ export async function section({ tab }) {
     if (suspenso.length > 0)   rows.push({ id: "s-suspenso", title: "🔍 Suspenso",            ref: "s-suspenso", items: suspenso });
     if (drama.length > 0)      rows.push({ id: "s-drama",    title: "🎭 Drama",               ref: "s-drama",    items: drama });
   }
-
+  
   let hero = { title: "Destacado", text: "Explora el mejor contenido disponible." };
   if (heroItem) {
     hero = {

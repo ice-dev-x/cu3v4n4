@@ -1,7 +1,7 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.6.7",
+  "version": "2.6.9",
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
@@ -34,6 +34,7 @@
     "browse",
     "episodes",
     "resolve"
+    
   ],
   "settings": [
   {
@@ -54,7 +55,7 @@
     "onAccent": "#FFFFFF",
     "background": "#074a6e",
     "surface": "#14302A",
-    "highlight": "#f7faf9"
+    "highlight": "##074a6e"
   },
   "icon": "icon.png"
 }
