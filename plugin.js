@@ -12,16 +12,13 @@ function cleanText(text) {
     .trim();
 }
 export async function section({ tab }) { 
-  // Definimos las pestañas disponibles
   const tabs = [
     { id: "pelis", label: "Películas" }, 
     { id: "series", label: "Series" }
   ];
   
-  // Determinamos qué pestaña está activa (por defecto "pelis")
   const chosen = tabs.some((t) => t.id === tab) ? tab : "pelis";
 
-  // Reutilizamos la función de fetch de tu home
   const fetchPage = async (path) => {
     try {
       const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
@@ -33,48 +30,89 @@ export async function section({ tab }) {
   let heroItem = null;
   const rows = [];
 
-  // Lógica para la pestaña de Películas
   if (chosen === "pelis") {
-    const htmlPopulares = await fetchPage("/tendencias");
-    const htmlPeliculas = await fetchPage("/peliculas");
-    const htmlEstrenos  = await fetchPage("/");
+    // Peticiones simultáneas para mayor velocidad
+    const [
+      htmlPopulares, htmlPeliculas, htmlEstrenos,
+      htmlAccion, htmlComedia, htmlTerror, htmlAnimacion,
+      htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama
+    ] = await Promise.all([
+      fetchPage("/tendencias"), fetchPage("/peliculas"), fetchPage("/"),
+      fetchPage("/peliculas?genero=accion"), fetchPage("/peliculas?genero=comedia"),
+      fetchPage("/peliculas?genero=terror"), fetchPage("/peliculas?genero=animacion"),
+      fetchPage("/peliculas?genero=anime"), fetchPage("/peliculas?genero=ciencia-ficcion"),
+      fetchPage("/peliculas?genero=suspenso"), fetchPage("/peliculas?genero=drama")
+    ]);
 
-    const populares = extractItems(htmlPopulares, 20, false);
-    const peliculas = extractItems(htmlPeliculas, 20, false);
-    const estrenos  = extractItems(htmlEstrenos, 20, false);
+    const populares  = extractItems(htmlPopulares, 20, false);
+    const peliculas  = extractItems(htmlPeliculas, 20, false);
+    const estrenos   = extractItems(htmlEstrenos, 20, false);
+    const accion     = extractItems(htmlAccion, 20, false);
+    const comedia    = extractItems(htmlComedia, 20, false);
+    const terror     = extractItems(htmlTerror, 20, false);
+    const animacion  = extractItems(htmlAnimacion, 20, false);
+    const anime      = extractItems(htmlAnime, 20, false);
+    const cienciaFic = extractItems(htmlCienciaFiccion, 20, false);
+    const suspenso   = extractItems(htmlSuspenso, 20, false);
+    const drama      = extractItems(htmlDrama, 20, false);
 
-    // Tomar la película más popular (o un estreno) para el Hero destacado
     if (populares.length > 0) heroItem = populares[0];
     else if (estrenos.length > 0) heroItem = estrenos[0];
 
-    // Llenamos las filas
     if (estrenos.length > 0)  rows.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
-    if (populares.length > 0) rows.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
-    if (peliculas.length > 0) rows.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
+    if (populares.length > 0) rows.push({ id: "populares", title: "⭐ Películas Populares", ref: "populares", items: populares });
+    if (peliculas.length > 0) rows.push({ id: "peliculas", title: "🎬 Películas Agregadas", ref: "peliculas", items: peliculas });
+    if (accion.length > 0)    rows.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
+    if (comedia.length > 0)   rows.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
+    if (terror.length > 0)    rows.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
+    if (animacion.length > 0) rows.push({ id: "animacion", title: "🎨 Animación",           ref: "animacion", items: animacion });
+    if (anime.length > 0)     rows.push({ id: "anime",     title: "🎌 Anime",               ref: "anime",     items: anime });
+    if (cienciaFic.length > 0)rows.push({ id: "sci-fi",    title: "🚀 Ciencia Ficción",     ref: "sci-fi",    items: cienciaFic });
+    if (suspenso.length > 0)  rows.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
+    if (drama.length > 0)     rows.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
-  // Lógica para la pestaña de Series
   } else if (chosen === "series") {
-    const htmlSeries = await fetchPage("/series");
-    const htmlHome   = await fetchPage("/"); // De aquí sacamos los episodios
+    // Adaptamos las URL para extraer los géneros específicos de series
+    const [
+      htmlSeries, htmlHome,
+      htmlAccion, htmlComedia, htmlTerror, htmlAnimacion,
+      htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama
+    ] = await Promise.all([
+      fetchPage("/series"), fetchPage("/"),
+      fetchPage("/series?genero=accion"), fetchPage("/series?genero=comedia"),
+      fetchPage("/series?genero=terror"), fetchPage("/series?genero=animacion"),
+      fetchPage("/series?genero=anime"), fetchPage("/series?genero=ciencia-ficcion"),
+      fetchPage("/series?genero=suspenso"), fetchPage("/series?genero=drama")
+    ]);
 
-    const series    = extractItems(htmlSeries, 20, false);
-    const episodios = extractItems(htmlHome, 20, true);
+    const series      = extractItems(htmlSeries, 20, false);
+    const episodios   = extractItems(htmlHome, 20, true);
+    const accion      = extractItems(htmlAccion, 20, false);
+    const comedia     = extractItems(htmlComedia, 20, false);
+    const terror      = extractItems(htmlTerror, 20, false);
+    const animacion   = extractItems(htmlAnimacion, 20, false);
+    const anime       = extractItems(htmlAnime, 20, false);
+    const cienciaFic  = extractItems(htmlCienciaFiccion, 20, false);
+    const suspenso    = extractItems(htmlSuspenso, 20, false);
+    const drama       = extractItems(htmlDrama, 20, false);
 
-    // Tomar la primera serie para el Hero destacado
     if (series.length > 0) heroItem = series[0];
     else if (episodios.length > 0) heroItem = episodios[0];
 
-    // Llenamos las filas
-    if (series.length > 0)    rows.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
-    if (episodios.length > 0) rows.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: episodios });
+    if (series.length > 0)     rows.push({ id: "series",     title: "📺 Series Actualizadas",  ref: "series",     items: series });
+    if (episodios.length > 0)  rows.push({ id: "episodios",  title: "🆕 Últimos Episodios",    ref: "episodios",  items: episodios });
+    // Usamos el prefijo "s-" en el ref para diferenciarlas de las películas al usar el botón "Ver más"
+    if (accion.length > 0)     rows.push({ id: "s-accion",   title: "💥 Acción",              ref: "s-accion",   items: accion });
+    if (comedia.length > 0)    rows.push({ id: "s-comedia",  title: "😂 Comedia",             ref: "s-comedia",  items: comedia });
+    if (terror.length > 0)     rows.push({ id: "s-terror",   title: "👻 Terror",              ref: "s-terror",   items: terror });
+    if (animacion.length > 0)  rows.push({ id: "s-animacion",title: "🎨 Animación",           ref: "s-animacion",items: animacion });
+    if (anime.length > 0)      rows.push({ id: "s-anime",    title: "🎌 Anime",               ref: "s-anime",    items: anime });
+    if (cienciaFic.length > 0) rows.push({ id: "s-sci-fi",   title: "🚀 Ciencia Ficción",     ref: "s-sci-fi",   items: cienciaFic });
+    if (suspenso.length > 0)   rows.push({ id: "s-suspenso", title: "🔍 Suspenso",            ref: "s-suspenso", items: suspenso });
+    if (drama.length > 0)      rows.push({ id: "s-drama",    title: "🎭 Drama",               ref: "s-drama",    items: drama });
   }
 
-  // Configuramos el bloque destacado (Hero) con la información obtenida
-  let hero = { 
-    title: "Destacado", 
-    text: "Explora el mejor contenido disponible." 
-  };
-  
+  let hero = { title: "Destacado", text: "Explora el mejor contenido disponible." };
   if (heroItem) {
     hero = {
       title: heroItem.title,
@@ -83,12 +121,7 @@ export async function section({ tab }) {
     };
   }
 
-  return {
-    tabs, 
-    tab: chosen, 
-    hero, 
-    rows
-  };
+  return { tabs, tab: chosen, hero, rows };
 }
 
 function base64Decode(str) {

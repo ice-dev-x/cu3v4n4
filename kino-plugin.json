@@ -1,11 +1,11 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.5.8",
+  "version": "2.5.9",
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
-  "description": "Películas y más",
+  "description": "Películas y más, si hay un problema con la reproduccion, cambie el servidor en la configuración del plugin",
   "author": "sadmachine",
   "streamHosts": "any",
   "hosts": [
