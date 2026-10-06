@@ -456,51 +456,73 @@ export async function resolve(ref) {
     const keyMatch = html1.match(/["']([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']/i);
     if (keyMatch) dynamicKey = keyMatch[1];
     
+    // Novedad: Guardamos un objeto con la URL y su IDIOMA
     const cuevanaWrappers = [];
     if (selectedServer) {
       let url = selectedServer;
       if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
       if (url.startsWith("//")) url = "https:" + url;
-      cuevanaWrappers.push(url);
+      // Si es una serie, el idioma ya lo muestra la lista de episodios
+      cuevanaWrappers.push({ url, lang: "" }); 
     } else {
-      const serverRegex = /data-server="([^"]+)"/g;
-      const servers = [];
-      let match;
-      while ((match = serverRegex.exec(html1)) !== null) servers.push(match[1]);
-      for (const s of servers) {
-        let url = s;
-        if (s.includes("?v=")) { try { url = base64Decode(s.split("?v=")[1]); } catch(e) {} }
-        if (url.startsWith("//")) url = "https:" + url;
-        if (url.includes("tungtungsahur")) cuevanaWrappers.push(url);
+      // Extraemos los bloques de idiomas (Latino, Castellano, Subtitulado)
+      const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
+      let cMatch;
+      let foundLangs = false;
+      while ((cMatch = containerRegex.exec(html1)) !== null) {
+        foundLangs = true;
+        let langName = cleanText(cMatch[2]) || "Latino";
+        const serversHtml = cMatch[3];
+        const serverRegex = /data-server="([^"]+)"/g;
+        let match;
+        while ((match = serverRegex.exec(serversHtml)) !== null) {
+          let url = match[1];
+          if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
+          if (url.startsWith("//")) url = "https:" + url;
+          if (url.includes("tungtungsahur")) cuevanaWrappers.push({ url, lang: langName });
+        }
+      }
+      // Respaldo por si la estructura cambia
+      if (!foundLangs) {
+        const serverRegex = /data-server="([^"]+)"/g;
+        let match;
+        while ((match = serverRegex.exec(html1)) !== null) {
+          let url = match[1];
+          if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
+          if (url.startsWith("//")) url = "https:" + url;
+          if (url.includes("tungtungsahur")) cuevanaWrappers.push({ url, lang: "Español" });
+        }
       }
     }
     
     if (cuevanaWrappers.length === 0) throw kino.error("not_found", "No hay servidores disponibles", { userMessage: "No se encontraron servidores de video en la página." });
     
-    // Obtenemos la preferencia del usuario y ordenamos la lista
     let pref = "3";
     try { pref = kino.config.get("servidor_pref") ?? "3"; } catch(e) {}
     
     if (pref !== "cualquiera") {
+      // Guardamos el índice original para no mezclar los idiomas al ordenar
+      cuevanaWrappers.forEach((item, i) => item.index = i);
       cuevanaWrappers.sort((a, b) => {
-        const indexA = (a.match(/token=([^&]+)/) || [])[1]?.[0];
-        const indexB = (b.match(/token=([^&]+)/) || [])[1]?.[0];
-        if (indexA === pref) return -1;
-        if (indexB === pref) return 1;
-        return 0;
+        const indexA = (a.url.match(/token=([^&]+)/) || [])[1]?.[0];
+        const indexB = (b.url.match(/token=([^&]+)/) || [])[1]?.[0];
+        
+        const isPrefA = indexA === pref ? 1 : 0;
+        const isPrefB = indexB === pref ? 1 : 0;
+        
+        if (isPrefA !== isPrefB) return isPrefB - isPrefA; // El preferido va primero
+        return a.index - b.index; // Mantiene el orden original (ej. Latino antes que Subtitulado)
       });
     }
 
-    // Ejecutamos la extracción de todos los servidores en paralelo para que sea súper rápido
-    const extractPromises = cuevanaWrappers.map(async (url) => {
+    const extractPromises = cuevanaWrappers.map(async (wrapper) => {
       try {
-        const tokenMatch = url.match(/token=([^&]+)/);
+        const tokenMatch = wrapper.url.match(/token=([^&]+)/);
         if (!tokenMatch) return null;
         const token = tokenMatch[1];
         const serverIndex = token[0];
         const encodedData = token.slice(1);
         
-        // Diccionario con nombres de servidores para el menú del reproductor
         const serversDict = {
           '1': { baseUrl: 'https://lkhjerbhye3wjkhodvh5xiczuvd.lol/v/', name: 'Hyper' },
           '2': { baseUrl: 'https://filemoon.sx/e/', name: 'Filemoon' },
@@ -519,9 +541,8 @@ export async function resolve(ref) {
         
         const iframeUrl = sInfo.baseUrl + decrypted;
         
-        // El timeout evita que un servidor caído congele la película
         const res3 = await kino.fetch(iframeUrl, { 
-          headers: { "Referer": url, "User-Agent": "Mozilla/5.0" },
+          headers: { "Referer": wrapper.url, "User-Agent": "Mozilla/5.0" },
           timeoutMs: 8000 
         });
         if (!res3.ok) return null;
@@ -531,8 +552,6 @@ export async function resolve(ref) {
         const originUrl = originMatch ? originMatch[1] : iframeUrl;
         
         let streamUrl = null;
-        
-        // Función ayudante para encontrar el video
         const findStreamInCode = (code) => {
           const streamFinal =
             code.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
@@ -567,8 +586,12 @@ export async function resolve(ref) {
           if (streamUrl.includes('.urlset/master.m3u8')) {
             streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
           }
+          
+          // Novedad: Formateamos la etiqueta para que muestre "Latino - Nebula"
+          const finalLabel = wrapper.lang ? `${wrapper.lang} - ${sInfo.name}` : sInfo.name;
+          
           return {
-            label: sInfo.name,
+            label: finalLabel,
             url: streamUrl,
             headers: { 
               "Referer": iframeUrl, 
@@ -582,10 +605,8 @@ export async function resolve(ref) {
       } catch (innerError) { return null; }
     });
 
-    // Esperamos a que terminen de resolver TODOS los servidores a la vez
     const results = await Promise.all(extractPromises);
     
-    // Limpiamos los servidores que hayan fallado y evitamos duplicados
     const validStreams = [];
     const seenUrls = new Set();
     
@@ -600,15 +621,12 @@ export async function resolve(ref) {
       throw kino.error("unavailable", "Se intentaron todos los servidores pero ninguno entregó el video.", { userMessage: "Los servidores de este video están inactivos por el momento."});
     }
 
-    // El primer stream es el principal (porque ya ordenamos el array de promesas arriba)
     const primary = validStreams[0];
-    
     const finalResponse = {
       url: primary.url,
       headers: primary.headers
     };
 
-    // Si hay más de uno funcional, los agregamos como alternativas
     if (validStreams.length > 1) {
       finalResponse.alternatives = validStreams.slice(1).map(s => ({
         label: s.label,
@@ -620,7 +638,7 @@ export async function resolve(ref) {
     return finalResponse;
 
   } catch (e) {
-    if (e && e.code) throw e; // Si ya es un kino.error, lo dejamos pasar
+    if (e && e.code) throw e;
     throw kino.error("unavailable", String(e), { userMessage: "Hubo un problema cargando este contenido. Intenta de nuevo más tarde." });
   }
 }
