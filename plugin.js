@@ -14,6 +14,8 @@ let result = text
   // Opción A: Formatear a "SERIE: Nombre" y "PELÍCULA: Nombre"
   result = result.replace(/^Serie\s+/i, "SERIE: ");
   result = result.replace(/^Pel[ií]cula\s+/i, "PELÍCULA: ");
+  return result;
+
 }
 export async function section({ tab }) { 
   const tabs = [
