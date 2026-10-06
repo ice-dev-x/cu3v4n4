@@ -1,11 +1,11 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.6.9",
+  "version": "2.7.0",
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
-  "description": "Películas y Series en LAT, ESP y SUB: Si hay un problema con la reproduccion, cambie de servidor",
+  "description": "Películas y Series en LAT, ESP y SUB: si hay un problema con la reproduccion, cambie de servidor",
   "author": "sadmachine",
   "streamHosts": "any",
   "hosts": [
@@ -34,7 +34,6 @@
     "browse",
     "episodes",
     "resolve"
-    
   ],
   "settings": [
   {
@@ -53,9 +52,9 @@
   "theme": {
     "accent": "#074a6e",
     "onAccent": "#FFFFFF",
-    "background": "#074a6e",
+    "background": "#0B1613",
     "surface": "#14302A",
-    "highlight": "##074a6e"
+    "highlight": "#074a6e"
   },
   "icon": "icon.png"
 }
