@@ -228,6 +228,7 @@ export async function episodes(ref) {
   const seasonLinks = [];
   let sMatch;
   while ((sMatch = seasonRegex.exec(html)) !== null) {
+
     let sLink = sMatch[1];
     if (!sLink.startsWith("http")) sLink = BASE_URL + sLink;
     if (!seasonLinks.includes(sLink)) seasonLinks.push(sLink);
@@ -245,6 +246,9 @@ export async function episodes(ref) {
       const epRegex = /<a[^>]+href="([^"]+\/episodio-\d+x\d+)"[^>]*>([\s\S]*?)<\/a>/gi;
       let epMatch;
       while ((epMatch = epRegex.exec(sHtml)) !== null) {
+        
+        //if (episodesList.length === 0) throw new Error(epMatch[2].substring(0, 500)); // DEBUG
+        
         let epRef = epMatch[1];
         if (!epRef.startsWith("http")) epRef = BASE_URL + epRef;
         if (vistos.has(epRef)) continue;
@@ -256,12 +260,12 @@ export async function episodes(ref) {
           number = parseInt(numMatch[2], 10);
         }
         const titleMatch = epMatch[2].match(/<span[^>]*>([^<]+)<\/span>/i) || epMatch[2].match(/alt="([^"]+)"/i);
-        const imgMatch = epMatch[2].match(/src=(?:"([^"]+)"|([^ >]+))/i);
-        let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
-        if (still && still.startsWith("//")) still = "https:" + still;
-        const epObj = { season, number, ref: epRef, title: titleMatch ? cleanText(titleMatch[1]) : `Episodio ${number}` };
-        if (still) epObj.still = still;
-        episodesList.push(epObj);
+       const imgMatch = epMatch[2].match(/src=(?:"([^"]+)"|([^ >]+))/i);
+let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
+if (still && still.startsWith("//")) still = "https:" + still;
+const epObj = { season, number, ref: epRef, title: `Episodio ${number}` };
+if (still) epObj.still = still;
+episodesList.push(epObj);
       }
     }
   }
