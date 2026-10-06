@@ -447,12 +447,15 @@ export async function resolve(ref) {
       targetUrl = parts[0];
       selectedServer = parts[1];
     }
+    
     const res1 = await kino.fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-    if (!res1.ok) throw new Error("Fallo al contactar el servidor principal");
+    if (!res1.ok) throw kino.error("unavailable", "Fallo al contactar el servidor principal de Cuevana", { userMessage: "Cuevana no responde en este momento. Intenta de nuevo más tarde." });
     const html1 = await res1.text();
+    
     let dynamicKey = 'a45f04ce-2394-47c3-b718-0ecd97ce51d6';
     const keyMatch = html1.match(/["']([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']/i);
     if (keyMatch) dynamicKey = keyMatch[1];
+    
     const cuevanaWrappers = [];
     if (selectedServer) {
       let url = selectedServer;
@@ -471,8 +474,13 @@ export async function resolve(ref) {
         if (url.includes("tungtungsahur")) cuevanaWrappers.push(url);
       }
     }
-    if (cuevanaWrappers.length === 0) throw new Error("No hay servidores disponibles");
-    const pref = kino.config.get("servidor_pref") ?? "3";
+    
+    if (cuevanaWrappers.length === 0) throw kino.error("not_found", "No hay servidores disponibles", { userMessage: "No se encontraron servidores de video en la página." });
+    
+    // Obtenemos la preferencia del usuario y ordenamos la lista
+    let pref = "3";
+    try { pref = kino.config.get("servidor_pref") ?? "3"; } catch(e) {}
+    
     if (pref !== "cualquiera") {
       cuevanaWrappers.sort((a, b) => {
         const indexA = (a.match(/token=([^&]+)/) || [])[1]?.[0];
@@ -482,84 +490,137 @@ export async function resolve(ref) {
         return 0;
       });
     }
-    for (const url of cuevanaWrappers) {
+
+    // Ejecutamos la extracción de todos los servidores en paralelo para que sea súper rápido
+    const extractPromises = cuevanaWrappers.map(async (url) => {
       try {
         const tokenMatch = url.match(/token=([^&]+)/);
-        if (!tokenMatch) continue;
+        if (!tokenMatch) return null;
         const token = tokenMatch[1];
         const serverIndex = token[0];
         const encodedData = token.slice(1);
+        
+        // Diccionario con nombres de servidores para el menú del reproductor
         const serversDict = {
-          '1': 'https://lkhjerbhye3wjkhodvh5xiczuvd.lol/v/',
-          '2': 'https://filemoon.sx/e/',
-          '3': 'https://lkhjerbhye3wjkhodvh5xlczuvd.lol/e/',
-          '4': 'https://dood.li/e/'
+          '1': { baseUrl: 'https://lkhjerbhye3wjkhodvh5xiczuvd.lol/v/', name: 'Hyper' },
+          '2': { baseUrl: 'https://filemoon.sx/e/', name: 'Filemoon' },
+          '3': { baseUrl: 'https://lkhjerbhye3wjkhodvh5xlczuvd.lol/e/', name: 'Nebula' },
+          '4': { baseUrl: 'https://dood.li/e/', name: 'Doodstream' }
         };
-        if (!serversDict[serverIndex]) continue;
+        
+        if (!serversDict[serverIndex]) return null;
+        const sInfo = serversDict[serverIndex];
+        
         const decoded = base64Decode(encodedData);
         let decrypted = '';
         for (let i = 0; i < decoded.length; i++) {
           decrypted += String.fromCharCode(decoded.charCodeAt(i) ^ dynamicKey.charCodeAt(i % dynamicKey.length));
         }
-        const iframeUrl = serversDict[serverIndex] + decrypted;
-        const res3 = await kino.fetch(iframeUrl, { headers: { "Referer": url, "User-Agent": "Mozilla/5.0" } });
-        if (!res3.ok) continue;
+        
+        const iframeUrl = sInfo.baseUrl + decrypted;
+        
+        // El timeout evita que un servidor caído congele la película
+        const res3 = await kino.fetch(iframeUrl, { 
+          headers: { "Referer": url, "User-Agent": "Mozilla/5.0" },
+          timeoutMs: 8000 
+        });
+        if (!res3.ok) return null;
+        
         const html3 = await res3.text();
         const originMatch = iframeUrl.match(/^(https?:\/\/[^\/]+)/i);
         const originUrl = originMatch ? originMatch[1] : iframeUrl;
+        
+        let streamUrl = null;
+        
+        // Función ayudante para encontrar el video
+        const findStreamInCode = (code) => {
+          const streamFinal =
+            code.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
+            code.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+          if (streamFinal) return streamFinal[1] || streamFinal[0];
+          return null;
+        };
+
         const scripts = html3.match(/<script[^>]*>([\s\S]*?)<\/script>/gi);
-        if (!scripts) continue;
-        for (const s of scripts) {
-          if (s.includes('eval(function(p,a,c,k,e,d)')) {
-            const scriptSospechoso = s.replace(/<script[^>]*>|<\/script>/gi, "").trim();
-            const packerMatch = scriptSospechoso.match(/eval\((function\(p,a,c,k,e,d\)[\s\S]+)\)/);
-            if (packerMatch) {
-              let unpackedCode = "";
-              try { unpackedCode = new Function("return (" + packerMatch[1] + ");")(); } catch (err) { continue; }
-              const streamFinal =
-                unpackedCode.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
-                unpackedCode.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
-              if (streamFinal) {
-                let streamUrl = streamFinal[1] || streamFinal[0];
-                if (streamUrl.includes('.urlset/master.m3u8')) {
-                  streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
-                }
-                return { 
-                  url: streamUrl, 
-                  headers: { 
-                    "Referer": iframeUrl, 
-                    "Origin": originUrl, 
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
-                    "Accept": "*/*" 
-                  } 
-                };
+        if (scripts) {
+          for (const s of scripts) {
+            if (s.includes('eval(function(p,a,c,k,e,d)')) {
+              const scriptSospechoso = s.replace(/<script[^>]*>|<\/script>/gi, "").trim();
+              const packerMatch = scriptSospechoso.match(/eval\((function\(p,a,c,k,e,d\)[\s\S]+)\)/);
+              if (packerMatch) {
+                try {
+                  const unpackedCode = new Function("return (" + packerMatch[1] + ");")();
+                  streamUrl = findStreamInCode(unpackedCode);
+                  if (streamUrl) break;
+                } catch (err) {}
               }
-            }
-          } else {
-            const streamFinal =
-              html3.match(/https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*/i) ||
-              html3.match(/(?:file|src|url)\s*:\s*["'](https?:\/\/[^"']+)["']/i);
-            if (streamFinal) {
-              let streamUrl = streamFinal[1] || streamFinal[0];
-              if (streamUrl.includes('.urlset/master.m3u8')) {
-                streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
-              }
-              return { 
-                url: streamUrl, 
-                headers: { 
-                  "Referer": iframeUrl, 
-                  "Origin": originUrl, 
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
-                  "Accept": "*/*" 
-                } 
-              };
+            } else {
+              streamUrl = findStreamInCode(s);
+              if (streamUrl) break;
             }
           }
         }
-      } catch (innerError) { continue; }
+        
+        if (!streamUrl) streamUrl = findStreamInCode(html3);
+        
+        if (streamUrl) {
+          if (streamUrl.includes('.urlset/master.m3u8')) {
+            streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
+          }
+          return {
+            label: sInfo.name,
+            url: streamUrl,
+            headers: { 
+              "Referer": iframeUrl, 
+              "Origin": originUrl, 
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+              "Accept": "*/*" 
+            }
+          };
+        }
+        return null;
+      } catch (innerError) { return null; }
+    });
+
+    // Esperamos a que terminen de resolver TODOS los servidores a la vez
+    const results = await Promise.all(extractPromises);
+    
+    // Limpiamos los servidores que hayan fallado y evitamos duplicados
+    const validStreams = [];
+    const seenUrls = new Set();
+    
+    for (const res of results) {
+      if (res && !seenUrls.has(res.url)) {
+        seenUrls.add(res.url);
+        validStreams.push(res);
+      }
     }
-    throw new Error("Se intentaron todos los servidores pero ninguno entregó el video.");
+
+    if (validStreams.length === 0) {
+      throw kino.error("unavailable", "Se intentaron todos los servidores pero ninguno entregó el video.", { userMessage: "Los servidores de este video están inactivos por el momento."});
+    }
+
+    // El primer stream es el principal (porque ya ordenamos el array de promesas arriba)
+    const primary = validStreams[0];
+    
+    const finalResponse = {
+      url: primary.url,
+      headers: primary.headers
+    };
+
+    // Si hay más de uno funcional, los agregamos como alternativas
+    if (validStreams.length > 1) {
+      finalResponse.alternatives = validStreams.slice(1).map(s => ({
+        label: s.label,
+        url: s.url,
+        headers: s.headers
+      }));
+    }
+
+    return finalResponse;
+
   } catch (e) {
-    throw new Error(String(e));
+    if (e && e.code) throw e; // Si ya es un kino.error, lo dejamos pasar
+    throw kino.error("unavailable", String(e), { userMessage: "Hubo un problema cargando este contenido. Intenta de nuevo más tarde." });
   }
 }

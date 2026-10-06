@@ -5,7 +5,7 @@
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
-  "description": "Películas y más, si hay un problema con la reproduccion, cambie el servidor en la configuración del plugin",
+  "description": "Películas y más, si hay un problema con la reproduccion, cambie de servidor",
   "author": "sadmachine",
   "streamHosts": "any",
   "hosts": [
@@ -50,11 +50,11 @@
 ],
   "color": "#035453",
   "theme": {
-    "accent": "#035453",
+    "accent": "#074a6e",
     "onAccent": "#FFFFFF",
     "background": "#0B1613",
     "surface": "#14302A",
-    "highlight": "#F2C14E"
+    "highlight": "#f7faf9"
   },
   "icon": "icon.png"
 }
