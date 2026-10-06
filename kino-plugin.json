@@ -1,13 +1,12 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.5.2",
-  "apiVersion": 6,
+  "version": "2.5.6",
+  "apiVersion": 4,
   "entry": "plugin.js",
-  "description": "Películas y series en español y latino",
+  "description": "Películas",
   "author": "ice-dev-x",
   "streamHosts": "any",
-  "discoverable": true,
   "hosts": [
     "cuevana3k.pro",
     "*.cuevana3k.pro",
@@ -31,38 +30,23 @@
   "capabilities": [
     "search",
     "home",
+    "browse",
     "episodes",
     "resolve"
   ],
   "settings": [
-    {
-      "key": "playback",
-      "label": "Reproducción",
-      "type": "section",
-      "hint": "Cómo se elige el servidor de cada video"
-    },
-    {
-      "key": "servidor_pref",
-      "label": "Servidor preferido",
-      "type": "select",
-      "default": "3",
-      "options": [
-        { "value": "1", "label": "Hyper (recomendado)" },
-        { "value": "3", "label": "Nebula" },
-        { "value": "cualquiera", "label": "Automático" }
-      ]
-    }
-  ],
-  "section": {
-    "label": "Cuevana"
-  },
-  "theme": {
-    "accent": "#1a6b8a",
-    "onAccent": "#ffffff",
-    "background": "#0a1a20",
-    "surface": "#0f2530",
-    "highlight": "#F2C14E"
-  },
+  {
+    "key": "servidor_pref",
+    "label": "Servidor preferido",
+    "type": "select",
+    "default": "3",
+    "options": [
+      { "value": "1", "label": "Hyper" },
+      { "value": "3", "label": "Nebula" },
+      { "value": "cualquiera", "label": "Automático" }
+    ]
+  }
+],
   "color": "#035453",
   "icon": "icon.png"
 }
