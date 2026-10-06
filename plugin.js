@@ -439,6 +439,10 @@ episodesList.push(epObj);
 
 export async function resolve(ref) {
   await null;
+  
+  // 1. Definimos el User-Agent robusto al inicio para usarlo en todas las peticiones
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
   try {
     let targetUrl = ref;
     let selectedServer = null;
@@ -448,7 +452,8 @@ export async function resolve(ref) {
       selectedServer = parts[1];
     }
     
-    const res1 = await kino.fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+    // Aplicamos el nuevo UA a la petición principal
+    const res1 = await kino.fetch(targetUrl, { headers: { "User-Agent": UA } });
     if (!res1.ok) throw kino.error("unavailable", "Fallo al contactar el servidor principal de Cuevana", { userMessage: "Cuevana no responde en este momento. Intenta de nuevo más tarde." });
     const html1 = await res1.text();
     
@@ -456,16 +461,13 @@ export async function resolve(ref) {
     const keyMatch = html1.match(/["']([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})["']/i);
     if (keyMatch) dynamicKey = keyMatch[1];
     
-    // Novedad: Guardamos un objeto con la URL y su IDIOMA
     const cuevanaWrappers = [];
     if (selectedServer) {
       let url = selectedServer;
       if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
       if (url.startsWith("//")) url = "https:" + url;
-      // Si es una serie, el idioma ya lo muestra la lista de episodios
       cuevanaWrappers.push({ url, lang: "" }); 
     } else {
-      // Extraemos los bloques de idiomas (Latino, Castellano, Subtitulado)
       const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
       let cMatch;
       let foundLangs = false;
@@ -479,10 +481,12 @@ export async function resolve(ref) {
           let url = match[1];
           if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
           if (url.startsWith("//")) url = "https:" + url;
-          if (url.includes("tungtungsahur")) cuevanaWrappers.push({ url, lang: langName });
+          
+          // 2. Quitamos el candado "tungtungsahur", aceptamos cualquier enlace web
+          if (url.startsWith("http")) cuevanaWrappers.push({ url, lang: langName });
         }
       }
-      // Respaldo por si la estructura cambia
+      
       if (!foundLangs) {
         const serverRegex = /data-server="([^"]+)"/g;
         let match;
@@ -490,7 +494,9 @@ export async function resolve(ref) {
           let url = match[1];
           if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
           if (url.startsWith("//")) url = "https:" + url;
-          if (url.includes("tungtungsahur")) cuevanaWrappers.push({ url, lang: "Español" });
+          
+          // Quitamos el candado aquí también
+          if (url.startsWith("http")) cuevanaWrappers.push({ url, lang: "Español" });
         }
       }
     }
@@ -501,7 +507,6 @@ export async function resolve(ref) {
     try { pref = kino.config.get("servidor_pref") ?? "3"; } catch(e) {}
     
     if (pref !== "cualquiera") {
-      // Guardamos el índice original para no mezclar los idiomas al ordenar
       cuevanaWrappers.forEach((item, i) => item.index = i);
       cuevanaWrappers.sort((a, b) => {
         const indexA = (a.url.match(/token=([^&]+)/) || [])[1]?.[0];
@@ -510,8 +515,8 @@ export async function resolve(ref) {
         const isPrefA = indexA === pref ? 1 : 0;
         const isPrefB = indexB === pref ? 1 : 0;
         
-        if (isPrefA !== isPrefB) return isPrefB - isPrefA; // El preferido va primero
-        return a.index - b.index; // Mantiene el orden original (ej. Latino antes que Subtitulado)
+        if (isPrefA !== isPrefB) return isPrefB - isPrefA;
+        return a.index - b.index;
       });
     }
 
@@ -541,8 +546,9 @@ export async function resolve(ref) {
         
         const iframeUrl = sInfo.baseUrl + decrypted;
         
+        // Aplicamos el nuevo UA a la petición del iframe
         const res3 = await kino.fetch(iframeUrl, { 
-          headers: { "Referer": wrapper.url, "User-Agent": "Mozilla/5.0" },
+          headers: { "Referer": wrapper.url, "User-Agent": UA },
           timeoutMs: 8000 
         });
         if (!res3.ok) return null;
@@ -587,7 +593,6 @@ export async function resolve(ref) {
             streamUrl = streamUrl.replace(/,[a-z,]+\.urlset\/master\.m3u8/, 'h/index.m3u8');
           }
           
-          // Novedad: Formateamos la etiqueta para que muestre "Latino - Nebula"
           const finalLabel = wrapper.lang ? `${wrapper.lang} - ${sInfo.name}` : sInfo.name;
           
           return {
@@ -596,7 +601,7 @@ export async function resolve(ref) {
             headers: { 
               "Referer": iframeUrl, 
               "Origin": originUrl, 
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 
+              "User-Agent": UA, // Aplicamos el UA al reproductor final
               "Accept": "*/*" 
             }
           };
