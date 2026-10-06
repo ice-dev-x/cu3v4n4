@@ -19,11 +19,9 @@ let result = text
 
 }
 export async function section({ tab }) { 
-  // 1. Añadimos la pestaña de categorías
   const tabs = [
     { id: "pelis", label: "Películas" }, 
-    { id: "series", label: "Series" },
-    { id: "categorias", label: "Categorías" }
+    { id: "series", label: "Series" }
   ];
   
   const chosen = tabs.some((t) => t.id === tab) ? tab : "pelis";
@@ -40,20 +38,21 @@ export async function section({ tab }) {
   const rows = [];
 
   if (chosen === "pelis") {
-    // Intacto, tal como lo pasaste
+    // Lote 1: Lo principal (Home, Tendencias, Películas)
     const [htmlPopulares, htmlPeliculas, htmlEstrenos] = await Promise.all([
       fetchPage("/tendencias"), fetchPage("/peliculas"), fetchPage("/")
     ]);
 
+    // Lote 2: Primer grupo de géneros
     const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
       fetchPage("/peliculas?genero=accion"), fetchPage("/peliculas?genero=comedia"),
       fetchPage("/peliculas?genero=terror"), fetchPage("/peliculas?genero=animacion")
     ]);
 
+    // Lote 3: Segundo grupo de géneros
     const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
       fetchPage("/peliculas?genero=anime"), fetchPage("/peliculas?genero=ciencia-ficcion"),
-      fetchPage("/peliculas?genero=suspenso"), fetchPage("/peliculas?genero=drama"),
-      
+      fetchPage("/peliculas?genero=suspenso"), fetchPage("/peliculas?genero=drama")
     ]);
 
     const populares  = extractItems(htmlPopulares, 20, false);
@@ -84,16 +83,18 @@ export async function section({ tab }) {
     if (drama.length > 0)     rows.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
   } else if (chosen === "series") {
-    // Intacto, tal como lo pasaste
+    // Lote 1: Series principales
     const [htmlSeries, htmlHome] = await Promise.all([
       fetchPage("/series"), fetchPage("/")
     ]);
 
+    // Lote 2: Primer grupo de géneros de series
     const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
       fetchPage("/series?genero=accion"), fetchPage("/series?genero=comedia"),
       fetchPage("/series?genero=terror"), fetchPage("/series?genero=animacion")
     ]);
 
+    // Lote 3: Segundo grupo de géneros de series
     const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
       fetchPage("/series?genero=anime"), fetchPage("/series?genero=ciencia-ficcion"),
       fetchPage("/series?genero=suspenso"), fetchPage("/series?genero=drama")
@@ -123,49 +124,13 @@ export async function section({ tab }) {
     if (cienciaFic.length > 0) rows.push({ id: "s-sci-fi",   title: "🚀 Ciencia Ficción",     ref: "s-sci-fi",   items: cienciaFic });
     if (suspenso.length > 0)   rows.push({ id: "s-suspenso", title: "🔍 Suspenso",            ref: "s-suspenso", items: suspenso });
     if (drama.length > 0)      rows.push({ id: "s-drama",    title: "🎭 Drama",               ref: "s-drama",    items: drama });
-    
-  } else if (chosen === "categorias") {
-    // 2. Nueva pestaña: solo cargamos y mostramos géneros
-    const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
-      fetchPage("/peliculas?genero=accion"), fetchPage("/peliculas?genero=comedia"),
-      fetchPage("/peliculas?genero=terror"), fetchPage("/peliculas?genero=animacion"),
-      fetchPage("/peliculas?genero=western")
-    ]);
-
-    const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
-      fetchPage("/peliculas?genero=anime"), fetchPage("/peliculas?genero=ciencia-ficcion"),
-      fetchPage("/peliculas?genero=suspenso"), fetchPage("/peliculas?genero=drama")
-    ]);
-
-    const accion     = extractItems(htmlAccion, 20, false);
-    const comedia    = extractItems(htmlComedia, 20, false);
-    const terror     = extractItems(htmlTerror, 20, false);
-    const animacion  = extractItems(htmlAnimacion, 20, false);
-    const anime      = extractItems(htmlAnime, 20, false);
-    const cienciaFic = extractItems(htmlCienciaFiccion, 20, false);
-    const suspenso   = extractItems(htmlSuspenso, 20, false);
-    const drama      = extractItems(htmlDrama, 20, false);
-    const western    = extractItems(htmlWestern, 20, false);
-
-    // Seleccionamos un elemento para el banner (hero) de la pestaña de categorías
-    if (accion.length > 0) heroItem = accion[0];
-
-    if (accion.length > 0)    rows.push({ id: "accion",    title: "💥 Acción",              ref: "accion",    items: accion });
-    if (comedia.length > 0)   rows.push({ id: "comedia",   title: "😂 Comedia",             ref: "comedia",   items: comedia });
-    if (terror.length > 0)    rows.push({ id: "terror",    title: "👻 Terror",              ref: "terror",    items: terror });
-    if (animacion.length > 0) rows.push({ id: "animacion", title: "🎨 Animación",           ref: "animacion", items: animacion });
-    if (anime.length > 0)     rows.push({ id: "anime",     title: "🎌 Anime",               ref: "anime",     items: anime });
-    if (cienciaFic.length > 0)rows.push({ id: "sci-fi",    title: "🚀 Ciencia Ficción",     ref: "sci-fi",    items: cienciaFic });
-    if (suspenso.length > 0)  rows.push({ id: "suspenso",  title: "🔍 Suspenso",            ref: "suspenso",  items: suspenso });
-    if (drama.length > 0)     rows.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
-    if (western.length > 0)   rows.push({ id: "western",   title: "🤠 Western",              ref: "western",   items: western });
   }
   
   let hero = { title: "Destacado", text: "Explora el mejor contenido disponible." };
   if (heroItem) {
     hero = {
       title: heroItem.title,
-      text: chosen === "categorias" ? "Explora nuestros géneros." : (chosen === "series" ? "Disfruta de esta serie destacada." : "Disfruta de esta película destacada."),
+      text: chosen === "series" ? "Disfruta de esta serie destacada." : "Disfruta de esta película destacada.",
       image: heroItem.poster
     };
   }
@@ -314,8 +279,7 @@ export async function browse(ref, cursor) {
     "anime":     "/peliculas?genero=anime",
     "sci-fi":    "/peliculas?genero=ciencia-ficcion",
     "suspenso":  "/peliculas?genero=suspenso",
-    "drama":     "/peliculas?genero=drama",
-    "western":   "/peliculas?genero=western"
+    "drama":     "/peliculas?genero=drama"
   };
 
   const path = paths[ref];
