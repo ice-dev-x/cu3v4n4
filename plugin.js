@@ -6,10 +6,14 @@ function log(...args) {
 
 function cleanText(text) {
   if (!text) return "";
-  return text
+let result = text
     .replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/&quot;/g, '"')
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]*>/g, "")
     .trim();
+
+  // Opción A: Formatear a "SERIE: Nombre" y "PELÍCULA: Nombre"
+  result = result.replace(/^Serie\s+/i, "SERIE: ");
+  result = result.replace(/^Pel[ií]cula\s+/i, "PELÍCULA: ");
 }
 export async function section({ tab }) { 
   const tabs = [
