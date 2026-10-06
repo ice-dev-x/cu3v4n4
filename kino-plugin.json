@@ -1,11 +1,12 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.5.6",
-  "apiVersion": 4,
+  "version": "2.5.7",
+  "apiVersion": 6,
+  "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
-  "description": "Películas",
-  "author": "ice-dev-x",
+  "description": "Películas y más",
+  "author": "sadmachine",
   "streamHosts": "any",
   "hosts": [
     "cuevana3k.pro",

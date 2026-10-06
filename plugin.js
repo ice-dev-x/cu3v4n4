@@ -11,6 +11,29 @@ function cleanText(text) {
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]*>/g, "")
     .trim();
 }
+export async function section({ tab }) { 
+  // tab llega null la primera vez
+  const tabs = [
+    { id: "pelis", label: "Películas" }, 
+    { id: "series", label: "Series" }
+  ];
+  
+  const chosen = tabs.some((t) => t.id === tab) ? tab : "pelis";
+  
+  return {
+    tabs, // opcional, máximo 8, nombres de hasta 24 caracteres
+    tab: chosen, // la pestaña que estás respondiendo
+    hero: { title: "Destacado", text: "Explora el mejor contenido disponible." }, // opcional; también image; text hasta 300 caracteres
+    rows: [
+      { 
+        id: `${chosen}-a`, 
+        title: "Destacadas", 
+        ref: `${chosen}-a`, 
+        items: [] /* Aquí puedes inyectar tus KinoItems */ 
+      }
+    ],
+  };
+}
 
 function base64Decode(str) {
   try {
