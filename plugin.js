@@ -12,26 +12,82 @@ function cleanText(text) {
     .trim();
 }
 export async function section({ tab }) { 
-  // tab llega null la primera vez
+  // Definimos las pestañas disponibles
   const tabs = [
     { id: "pelis", label: "Películas" }, 
     { id: "series", label: "Series" }
   ];
   
+  // Determinamos qué pestaña está activa (por defecto "pelis")
   const chosen = tabs.some((t) => t.id === tab) ? tab : "pelis";
+
+  // Reutilizamos la función de fetch de tu home
+  const fetchPage = async (path) => {
+    try {
+      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) return "";
+      return await res.text();
+    } catch (e) { return ""; }
+  };
+
+  let heroItem = null;
+  const rows = [];
+
+  // Lógica para la pestaña de Películas
+  if (chosen === "pelis") {
+    const htmlPopulares = await fetchPage("/tendencias");
+    const htmlPeliculas = await fetchPage("/peliculas");
+    const htmlEstrenos  = await fetchPage("/");
+
+    const populares = extractItems(htmlPopulares, 20, false);
+    const peliculas = extractItems(htmlPeliculas, 20, false);
+    const estrenos  = extractItems(htmlEstrenos, 20, false);
+
+    // Tomar la película más popular (o un estreno) para el Hero destacado
+    if (populares.length > 0) heroItem = populares[0];
+    else if (estrenos.length > 0) heroItem = estrenos[0];
+
+    // Llenamos las filas
+    if (estrenos.length > 0)  rows.push({ id: "estrenos",  title: "🔥 Estrenos Destacados", ref: "estrenos",  items: estrenos });
+    if (populares.length > 0) rows.push({ id: "populares", title: "⭐ Películas Populares",  ref: "populares", items: populares });
+    if (peliculas.length > 0) rows.push({ id: "peliculas", title: "🎬 Películas Agregadas",  ref: "peliculas", items: peliculas });
+
+  // Lógica para la pestaña de Series
+  } else if (chosen === "series") {
+    const htmlSeries = await fetchPage("/series");
+    const htmlHome   = await fetchPage("/"); // De aquí sacamos los episodios
+
+    const series    = extractItems(htmlSeries, 20, false);
+    const episodios = extractItems(htmlHome, 20, true);
+
+    // Tomar la primera serie para el Hero destacado
+    if (series.length > 0) heroItem = series[0];
+    else if (episodios.length > 0) heroItem = episodios[0];
+
+    // Llenamos las filas
+    if (series.length > 0)    rows.push({ id: "series",    title: "📺 Series Actualizadas",  ref: "series",    items: series });
+    if (episodios.length > 0) rows.push({ id: "episodios", title: "🆕 Últimos Episodios",   ref: "episodios", items: episodios });
+  }
+
+  // Configuramos el bloque destacado (Hero) con la información obtenida
+  let hero = { 
+    title: "Destacado", 
+    text: "Explora el mejor contenido disponible." 
+  };
   
+  if (heroItem) {
+    hero = {
+      title: heroItem.title,
+      text: chosen === "series" ? "Disfruta de esta serie destacada." : "Disfruta de esta película destacada.",
+      image: heroItem.poster
+    };
+  }
+
   return {
-    tabs, // opcional, máximo 8, nombres de hasta 24 caracteres
-    tab: chosen, // la pestaña que estás respondiendo
-    hero: { title: "Destacado", text: "Explora el mejor contenido disponible." }, // opcional; también image; text hasta 300 caracteres
-    rows: [
-      { 
-        id: `${chosen}-a`, 
-        title: "Destacadas", 
-        ref: `${chosen}-a`, 
-        items: [] /* Aquí puedes inyectar tus KinoItems */ 
-      }
-    ],
+    tabs, 
+    tab: chosen, 
+    hero, 
+    rows
   };
 }
 
