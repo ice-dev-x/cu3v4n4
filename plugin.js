@@ -1,4 +1,4 @@
-export const UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36";
+export const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const BASE_URL = "https://cuevana3k.pro";
 
 function log(...args) {
@@ -7,17 +7,16 @@ function log(...args) {
 
 function cleanText(text) {
   if (!text) return "";
-let result = text
+  let result = text
     .replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/&quot;/g, '"')
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]*>/g, "")
     .trim();
 
-  // Opción A: Formatear a "SERIE: Nombre" y "PELÍCULA: Nombre"
   result = result.replace(/^Serie\s+/i, "SERIE: ");
   result = result.replace(/^Pel[ií]cula\s+/i, "PELÍCULA: ");
   return result;
-
 }
+
 export async function section({ tab }) { 
   const tabs = [
     { id: "pelis", label: "Películas" }, 
@@ -28,7 +27,7 @@ export async function section({ tab }) {
 
   const fetchPage = async (path) => {
     try {
-      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": UA } });
       if (!res.ok) return "";
       return await res.text();
     } catch (e) { return ""; }
@@ -38,18 +37,15 @@ export async function section({ tab }) {
   const rows = [];
 
   if (chosen === "pelis") {
-    // Lote 1: Lo principal (Home, Tendencias, Películas)
     const [htmlPopulares, htmlPeliculas, htmlEstrenos] = await Promise.all([
       fetchPage("/tendencias"), fetchPage("/peliculas"), fetchPage("/")
     ]);
 
-    // Lote 2: Primer grupo de géneros
     const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
       fetchPage("/peliculas?genero=accion"), fetchPage("/peliculas?genero=comedia"),
       fetchPage("/peliculas?genero=terror"), fetchPage("/peliculas?genero=animacion")
     ]);
 
-    // Lote 3: Segundo grupo de géneros
     const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
       fetchPage("/peliculas?genero=anime"), fetchPage("/peliculas?genero=ciencia-ficcion"),
       fetchPage("/peliculas?genero=suspenso"), fetchPage("/peliculas?genero=drama")
@@ -83,18 +79,15 @@ export async function section({ tab }) {
     if (drama.length > 0)     rows.push({ id: "drama",     title: "🎭 Drama",               ref: "drama",     items: drama });
 
   } else if (chosen === "series") {
-    // Lote 1: Series principales
     const [htmlSeries, htmlHome] = await Promise.all([
       fetchPage("/series"), fetchPage("/")
     ]);
 
-    // Lote 2: Primer grupo de géneros de series
     const [htmlAccion, htmlComedia, htmlTerror, htmlAnimacion] = await Promise.all([
       fetchPage("/series?genero=accion"), fetchPage("/series?genero=comedia"),
       fetchPage("/series?genero=terror"), fetchPage("/series?genero=animacion")
     ]);
 
-    // Lote 3: Segundo grupo de géneros de series
     const [htmlAnime, htmlCienciaFiccion, htmlSuspenso, htmlDrama] = await Promise.all([
       fetchPage("/series?genero=anime"), fetchPage("/series?genero=ciencia-ficcion"),
       fetchPage("/series?genero=suspenso"), fetchPage("/series?genero=drama")
@@ -128,10 +121,28 @@ export async function section({ tab }) {
   
   let hero = { title: "Destacado", text: "Explora el mejor contenido disponible." };
   if (heroItem) {
+    // EL ASALTO RÁPIDO: Extraemos fondo HD y sinopsis para el Banner de la TV
+    try {
+      const targetUrl = heroItem.ref.split("/episodio-")[0];
+      const heroRes = await kino.fetch(targetUrl, { headers: { "User-Agent": UA } });
+      if (heroRes.ok) {
+        const heroHtml = await heroRes.text();
+        const bgMatch = heroHtml.match(/background-image:\s*url\((['"]?)([^)'"]+)\1\)/i);
+        if (bgMatch && !bgMatch[2].startsWith('data:')) {
+           let bUrl = bgMatch[2];
+           if (bUrl.startsWith('//')) bUrl = 'https:' + bUrl;
+           else if (bUrl.startsWith('/')) bUrl = BASE_URL + bUrl;
+           heroItem.backdrop = bUrl;
+        }
+        const descMatch = heroHtml.match(/class="Description"[^>]*>([\s\S]*?)<\/div>/i) || heroHtml.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
+        if (descMatch) heroItem.overview = cleanText(descMatch[1]);
+      }
+    } catch (e) {}
+
     hero = {
       title: heroItem.title,
-      text: chosen === "series" ? "Disfruta de esta serie destacada." : "Disfruta de esta película destacada.",
-      image: heroItem.poster
+      text: heroItem.overview || (chosen === "series" ? "Disfruta de esta serie destacada." : "Disfruta de esta película destacada."),
+      image: heroItem.backdrop || heroItem.poster
     };
   }
 
@@ -139,9 +150,7 @@ export async function section({ tab }) {
 }
 
 function base64Decode(str) {
-  try {
-    return atob(str);
-  } catch (e) {
+  try { return atob(str); } catch (e) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
     let output = '';
     const cleanStr = (str || '').replace(/[^A-Za-z0-9\+\/\=]/g, '');
@@ -189,16 +198,26 @@ function extractItems(html, limit = 20, isEpisode = false) {
       let poster = imgMatch[1] || imgMatch[2];
       if (poster.startsWith("//")) poster = "https:" + poster;
       if (poster.startsWith("/")) poster = BASE_URL + poster;
+      
+      // ESCALADOR HD: Subimos la resolución a 500px si es de TMDB
+      if (poster.includes("image.tmdb.org")) {
+        poster = poster.replace(/\/w\d+\//i, "/w500/");
+      }
+      
       const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
       const tmdbId = extractTmdbId(fullLink);
       const item = {
         id: "item-" + fullLink.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
         ref: fullLink,
         title: cleanText(titleMatch[1] || titleMatch[2]),
-        kind: link.includes("/serie/") ? "series" : "movie",
+        kind: "series", // TRUCO: Todo es serie para forzar la lectura de la sinopsis
         poster
       };
       if (tmdbId) item.ids = { tmdb: tmdbId };
+      
+      const yearMatch = innerHtml.match(/class="Year"[^>]*>(\d{4})</i) || innerHtml.match(/>(\d{4})<\/(?:span|p)>/i);
+      if (yearMatch) item.year = parseInt(yearMatch[1], 10);
+      
       items.push(item);
     }
   }
@@ -208,13 +227,12 @@ function extractItems(html, limit = 20, isEpisode = false) {
 export async function home() {
   const fetchPage = async (path) => {
     try {
-      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+      const res = await kino.fetch(`${BASE_URL}${path}`, { headers: { "User-Agent": UA } });
       if (!res.ok) return "";
       return await res.text();
     } catch (e) { return ""; }
   };
 
-  // Secciones principales y géneros de películas
   const htmlHome          = await fetchPage("/");
   const htmlPeliculas     = await fetchPage("/peliculas");
   const htmlSeries        = await fetchPage("/series");
@@ -291,7 +309,7 @@ export async function browse(ref, cursor) {
     ? `${BASE_URL}${path}${path.includes("?") ? "&" : "?"}page=${page}`
     : `${BASE_URL}${path}`;
 
-  const res = await kino.fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+  const res = await kino.fetch(url, { headers: { "User-Agent": UA } });
   if (!res.ok) throw kino.error("not_found", "no se pudo cargar la página");
 
   const html = await res.text();
@@ -305,7 +323,7 @@ export async function browse(ref, cursor) {
 
 export async function search(query) {
   const searchTerm = (query && query.q) ? encodeURIComponent(query.q) : "";
-  const res = await kino.fetch(`${BASE_URL}/explorar?s=${searchTerm}`, { headers: { "User-Agent": "Mozilla/5.0" } });
+  const res = await kino.fetch(`${BASE_URL}/explorar?s=${searchTerm}`, { headers: { "User-Agent": UA } });
   if (!res.ok) return [];
   const html = await res.text();
   const results = [];
@@ -324,13 +342,19 @@ export async function search(query) {
       vistos.add(link);
       let poster = imgMatch[1] || imgMatch[2];
       if (poster.startsWith("//")) poster = "https:" + poster;
+      
+      // Escalador HD para la búsqueda
+      if (poster.includes("image.tmdb.org")) {
+        poster = poster.replace(/\/w\d+\//i, "/w500/");
+      }
+
       const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
       const tmdbId = extractTmdbId(fullLink);
       const item = {
         id: "item-" + fullLink.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
         ref: fullLink,
         title: cleanText(titleMatch[1] || titleMatch[2]),
-        kind: link.includes("/serie/") ? "series" : "movie",
+        kind: "series", // Truco maestro en la búsqueda
         poster
       };
       if (yearMatch) item.year = parseInt(yearMatch[1], 10);
@@ -342,21 +366,20 @@ export async function search(query) {
 }
 
 export async function episodes(ref) {
-  const res = await kino.fetch(ref, { headers: { "User-Agent": UA } });
+  // Limpiador: si el usuario entra desde un episodio suelto, vamos a la serie original
+  const targetUrl = ref.split("/episodio-")[0];
+  const res = await kino.fetch(targetUrl, { headers: { "User-Agent": UA } });
   if (!res.ok) throw new Error("No se pudo obtener el contenido");
   const html = await res.text();
 
   const metadata = {};
 
-  // Sinopsis (Overview)
   const descMatch = html.match(/class="Description"[^>]*>([\s\S]*?)<\/div>/i) || html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
   if (descMatch) metadata.overview = cleanText(descMatch[1]);
 
-  // Calificación (Rating)
   const voteMatch = html.match(/<span[^>]+class="Num"[^>]*>([\d.]+)<\/span>/i) || html.match(/class="Vote"[^>]*>\s*([\d.]+)\s*</i) || html.match(/class="AAIco-star"[^>]*>.*?<\/i>\s*([\d.]+)/i);
   if (voteMatch) metadata.rating = parseFloat(voteMatch[1]);
 
-  // Géneros (Genres)
   const gRegex = /<a[^>]+href="[^"]*genero[^"]*"[^>]*>\s*([^<]+)\s*<\/a>/gi;
   let gm;
   const genres = [];
@@ -365,20 +388,23 @@ export async function episodes(ref) {
   }
   if (genres.length > 0) metadata.genres = [...new Set(genres)]; 
 
-  // Año (Year) - Radar ampliado para que no se escape en las series
-  const yearMatch = html.match(/class="Date"[^>]*>\s*(\d{4})\s*</i) || 
-                    html.match(/>(19\d{2}|20\d{2})<\/(?:span|p|a)>/i) || 
-                    html.match(/Estreno:\s*(\d{4})/i) ||
-                    html.match(/<span class="Year">(\d{4})<\/span>/i);
+  const yearMatch = html.match(/class="Date"[^>]*>\s*(\d{4})\s*</i) || html.match(/>(19\d{2}|20\d{2})<\/(?:span|p|a)>/i) || html.match(/Estreno:\s*(\d{4})/i) || html.match(/<span class="Year">(\d{4})<\/span>/i);
   if (yearMatch) metadata.year = parseInt(yearMatch[1], 10);
 
-  // Fondo / Póster (Backdrop)
-  const bgMatch = html.match(/<meta\s+(?:property|name)="og:image"\s+content="([^"]+)"/i) ||
-                  html.match(/background-image:\s*url\((['"]?)([^)'"d]+)\1\)/i) ||
-                  html.match(/<img[^>]+class="[^"]*lazy[^"]*"[^>]+data-src="([^"]+)"/i);
-  
+  // EXTRAER CARÁTULA Y FONDO PANORÁMICO HD
+  const posterMatch = html.match(/<meta\s+(?:property|name)="og:image"\s+content="([^"]+)"/i) || html.match(/<div[^>]+class="Image"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i);
+  if (posterMatch) {
+    let pUrl = posterMatch[1];
+    if (pUrl && !pUrl.startsWith('data:')) {
+        if (pUrl.startsWith('//')) pUrl = 'https:' + pUrl;
+        else if (pUrl.startsWith('/')) pUrl = BASE_URL + pUrl;
+        metadata.poster = pUrl; 
+    }
+  }
+
+  const bgMatch = html.match(/background-image:\s*url\((['"]?)([^)'"]+)\1\)/i);
   if (bgMatch) {
-    let bUrl = bgMatch[1] || bgMatch[2];
+    let bUrl = bgMatch[2];
     if (bUrl && !bUrl.startsWith('data:')) {
         if (bUrl.startsWith('//')) bUrl = 'https:' + bUrl;
         else if (bUrl.startsWith('/')) bUrl = BASE_URL + bUrl;
@@ -386,13 +412,9 @@ export async function episodes(ref) {
     }
   }
 
-  // Intento más agresivo de capturar TMDB ID para forzar a Kino a traer los nombres de episodios
-  const tmdbIdMatch = html.match(/tmdb[=&_]*(\d{3,})/i) || 
-                      html.match(/data-id="(\d{3,})"/i) || 
-                      html.match(/"tmdb_id"\s*:\s*"?(\d+)"?/i);
+  const tmdbIdMatch = html.match(/tmdb[=&_]*(\d{3,})/i) || html.match(/data-id="(\d{3,})"/i) || html.match(/"tmdb_id"\s*:\s*"?(\d+)"?/i);
   if (tmdbIdMatch) metadata.ids = { tmdb: parseInt(tmdbIdMatch[1], 10) };
 
-  // Extraer episodios
   const seasonRegex = /<a[^>]+href="([^"]+\/temporada-\d+)"/gi;
   const seasonLinks = [];
   let sMatch;
@@ -435,7 +457,6 @@ export async function episodes(ref) {
         let rawTitle = titleMatch ? cleanText(titleMatch[1] || titleMatch[2]) : "";
         let epTitle = `Episodio ${number}`;
         
-        // Usamos el título que venga, si es que Cuevana en algún momento decide ponerlos
         if (rawTitle && isNaN(rawTitle) && !rawTitle.toLowerCase().includes("episodio")) {
           epTitle = rawTitle;
         }
@@ -447,29 +468,28 @@ export async function episodes(ref) {
     }
   }
 
-  // Si no hay episodios, es una película
   if (episodesList.length === 0) {
-    episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
+    episodesList.push({ season: 1, number: 1, ref: targetUrl, title: "Reproducir Película" });
   }
 
   episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
   
   const result = { episodes: episodesList };
-  
-  // SOLUCIÓN: Empaquetar TODO en "series" como lo exige la app
-  if (Object.keys(metadata).length > 0) {
-    result.series = metadata;
-  }
+  if (Object.keys(metadata).length > 0) result.series = metadata;
   
   return result;
 }
 
-
 export async function resolve(ref) {
   await null;
   
-  // 1. Definimos el User-Agent robusto al inicio para usarlo en todas las peticiones
-  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  try {
+    const cached = kino.storage.get(`stream:${ref}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.expiresAt > Date.now()) return parsed.data;
+    }
+  } catch (_) {}
 
   try {
     let targetUrl = ref;
@@ -480,9 +500,8 @@ export async function resolve(ref) {
       selectedServer = parts[1];
     }
     
-    // Aplicamos el nuevo UA a la petición principal
     const res1 = await kino.fetch(targetUrl, { headers: { "User-Agent": UA } });
-    if (!res1.ok) throw kino.error("unavailable", "Fallo al contactar el servidor principal de Cuevana", { userMessage: "Cuevana no responde en este momento. Intenta de nuevo más tarde." });
+    if (!res1.ok) throw kino.error("unavailable", "Fallo al contactar el servidor principal", { userMessage: "Cuevana no responde en este momento." });
     const html1 = await res1.text();
     
     let dynamicKey = 'a45f04ce-2394-47c3-b718-0ecd97ce51d6';
@@ -509,8 +528,6 @@ export async function resolve(ref) {
           let url = match[1];
           if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
           if (url.startsWith("//")) url = "https:" + url;
-          
-          // 2. Quitamos el candado "tungtungsahur", aceptamos cualquier enlace web
           if (url.startsWith("http")) cuevanaWrappers.push({ url, lang: langName });
         }
       }
@@ -522,28 +539,41 @@ export async function resolve(ref) {
           let url = match[1];
           if (url.includes("?v=")) { try { url = base64Decode(url.split("?v=")[1]); } catch(e) {} }
           if (url.startsWith("//")) url = "https:" + url;
-          
-          // Quitamos el candado aquí también
           if (url.startsWith("http")) cuevanaWrappers.push({ url, lang: "Español" });
         }
       }
     }
     
-    if (cuevanaWrappers.length === 0) throw kino.error("not_found", "No hay servidores disponibles", { userMessage: "No se encontraron servidores de video en la página." });
+    if (cuevanaWrappers.length === 0) throw kino.error("not_found", "No hay servidores", { userMessage: "No se encontraron servidores." });
     
-    let pref = "3";
-    try { pref = kino.config.get("servidor_pref") ?? "3"; } catch(e) {}
+    // === EL FILTRO INTELIGENTE DE IDIOMA Y SERVIDOR ===
+    let prefIdioma = "cualquiera";
+    try { prefIdioma = (kino.config.get("idioma_pref") ?? "cualquiera").toLowerCase(); } catch(e) {}
+
+    let prefServidor = "3";
+    try { prefServidor = kino.config.get("servidor_pref") ?? "3"; } catch(e) {}
     
-    if (pref !== "cualquiera") {
+    if (prefIdioma !== "cualquiera" || prefServidor !== "cualquiera") {
       cuevanaWrappers.forEach((item, i) => item.index = i);
       cuevanaWrappers.sort((a, b) => {
-        const indexA = (a.url.match(/token=([^&]+)/) || [])[1]?.[0];
-        const indexB = (b.url.match(/token=([^&]+)/) || [])[1]?.[0];
-        
-        const isPrefA = indexA === pref ? 1 : 0;
-        const isPrefB = indexB === pref ? 1 : 0;
-        
-        if (isPrefA !== isPrefB) return isPrefB - isPrefA;
+        // 1. Filtrar por Idioma
+        if (prefIdioma !== "cualquiera") {
+          const langA = (a.lang || "").toLowerCase();
+          const langB = (b.lang || "").toLowerCase();
+          const matchA = langA.includes(prefIdioma) ? 1 : 0;
+          const matchB = langB.includes(prefIdioma) ? 1 : 0;
+          if (matchA !== matchB) return matchB - matchA; 
+        }
+
+        // 2. Filtrar por Servidor
+        if (prefServidor !== "cualquiera") {
+          const indexA = (a.url.match(/token=([^&]+)/) || [])[1]?.[0];
+          const indexB = (b.url.match(/token=([^&]+)/) || [])[1]?.[0];
+          const isPrefA = indexA === prefServidor ? 1 : 0;
+          const isPrefB = indexB === prefServidor ? 1 : 0;
+          if (isPrefA !== isPrefB) return isPrefB - isPrefA;
+        }
+
         return a.index - b.index;
       });
     }
@@ -574,7 +604,6 @@ export async function resolve(ref) {
         
         const iframeUrl = sInfo.baseUrl + decrypted;
         
-        // Aplicamos el nuevo UA a la petición del iframe
         const res3 = await kino.fetch(iframeUrl, { 
           headers: { "Referer": wrapper.url, "User-Agent": UA },
           timeoutMs: 8000 
@@ -629,7 +658,7 @@ export async function resolve(ref) {
             headers: { 
               "Referer": iframeUrl, 
               "Origin": originUrl, 
-              "User-Agent": UA, // Aplicamos el UA al reproductor final
+              "User-Agent": UA,
               "Accept": "*/*" 
             }
           };
@@ -651,7 +680,7 @@ export async function resolve(ref) {
     }
 
     if (validStreams.length === 0) {
-      throw kino.error("unavailable", "Se intentaron todos los servidores pero ninguno entregó el video.", { userMessage: "Los servidores de este video están inactivos por el momento."});
+      throw kino.error("unavailable", "Fallaron los servidores", { userMessage: "Los servidores están inactivos por el momento."});
     }
 
     const primary = validStreams[0];
@@ -667,6 +696,12 @@ export async function resolve(ref) {
         headers: s.headers
       }));
     }
+
+    try {
+      const ttlMs = 14400 * 1000; 
+      const cacheData = { data: finalResponse, expiresAt: Date.now() + ttlMs };
+      kino.storage.set(`stream:${ref}`, JSON.stringify(cacheData), { ttlMs });
+    } catch (_) {}
 
     return finalResponse;
 
