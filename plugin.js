@@ -529,7 +529,7 @@ export async function resolve(ref) {
     if (cuevanaWrappers.length === 0) throw kino.error("not_found", "No hay servidores disponibles", { userMessage: "No se encontraron servidores de video en la página." });
 
     let pref = "1";
-    try { pref = kino.config.get("servidor_pref") ?? "3"; } catch(e) {}
+    try { pref = kino.config.get("servidor_pref") ?? "1"; } catch(e) {}
 
     if (pref !== "cualquiera") {
       cuevanaWrappers.forEach((item, i) => item.index = i);
