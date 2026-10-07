@@ -1,7 +1,7 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.8.3",
+  "version": "2.8.5",
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",

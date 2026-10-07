@@ -12,9 +12,12 @@ function cleanText(text) {
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/<[^>]*>/g, "")
     .trim();
 
-  result = result.replace(/^Serie\s+/i, "SERIE: ");
-  result = result.replace(/^Pel[ií]cula\s+/i, "PELÍCULA: ");
-  return result;
+  // LIMPIEZA EXTREMA PARA SINCRONIZAR CON TMDB
+  // Quitamos "Película", "Serie", o idiomas que vengan pegados al título
+  result = result.replace(/^(?:Pel[ií]cula|Serie|Anime)\s*[-:]?\s*/i, "");
+  result = result.replace(/\s*(?:Audio Latino|Latino|Subtitulado|HD|1080p).*$/i, "");
+  
+  return result.trim();
 }
 
 export async function section({ tab }) { 
@@ -210,7 +213,7 @@ function extractItems(html, limit = 20, isEpisode = false) {
         id: "item-" + fullLink.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
         ref: fullLink,
         title: cleanText(titleMatch[1] || titleMatch[2]),
-        kind: "series", // TRUCO: Todo es serie para forzar la lectura de la sinopsis
+        kind: link.includes("/serie/") ? "series" : "movie", // TRUCO: Todo es serie para forzar la lectura de la sinopsis
         poster
       };
       if (tmdbId) item.ids = { tmdb: tmdbId };
@@ -290,6 +293,7 @@ export async function browse(ref, cursor) {
     "populares": "/tendencias",
     "peliculas": "/peliculas",
     "series":    "/series",
+    // Géneros de Películas
     "accion":    "/peliculas?genero=accion",
     "comedia":   "/peliculas?genero=comedia",
     "terror":    "/peliculas?genero=terror",
@@ -297,7 +301,16 @@ export async function browse(ref, cursor) {
     "anime":     "/peliculas?genero=anime",
     "sci-fi":    "/peliculas?genero=ciencia-ficcion",
     "suspenso":  "/peliculas?genero=suspenso",
-    "drama":     "/peliculas?genero=drama"
+    "drama":     "/peliculas?genero=drama",
+    // Géneros de Series (¡Estos eran los que faltaban!)
+    "s-accion":    "/series?genero=accion",
+    "s-comedia":   "/series?genero=comedia",
+    "s-terror":    "/series?genero=terror",
+    "s-animacion": "/series?genero=animacion",
+    "s-anime":     "/series?genero=anime",
+    "s-sci-fi":    "/series?genero=ciencia-ficcion",
+    "s-suspenso":  "/series?genero=suspenso",
+    "s-drama":     "/series?genero=drama"
   };
 
   const path = paths[ref];
@@ -348,13 +361,13 @@ export async function search(query) {
         poster = poster.replace(/\/w\d+\//i, "/w500/");
       }
 
-      const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
+const fullLink = link.startsWith("http") ? link : `${BASE_URL}${link}`;
       const tmdbId = extractTmdbId(fullLink);
       const item = {
         id: "item-" + fullLink.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
         ref: fullLink,
         title: cleanText(titleMatch[1] || titleMatch[2]),
-        kind: "series", // Truco maestro en la búsqueda
+        kind: link.includes("/serie/") ? "series" : "movie", // <-- REVERTIDO A LA NORMALIDAD
         poster
       };
       if (yearMatch) item.year = parseInt(yearMatch[1], 10);
