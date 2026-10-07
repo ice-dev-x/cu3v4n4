@@ -528,7 +528,7 @@ export async function resolve(ref) {
 
     if (cuevanaWrappers.length === 0) throw kino.error("not_found", "No hay servidores disponibles", { userMessage: "No se encontraron servidores de video en la página." });
 
-    let pref = "3";
+    let pref = "1";
     try { pref = kino.config.get("servidor_pref") ?? "3"; } catch(e) {}
 
     if (pref !== "cualquiera") {
@@ -673,18 +673,11 @@ export async function resolve(ref) {
     throw kino.error("unavailable", String(e), { userMessage: "Hubo un problema cargando este contenido. Intenta de nuevo más tarde." });
   }
 }
+// NUEVA FUNCIÓN: El "Puente" corregido
 export async function sign(url, data, ref, action) {
-  // Extraemos el origen directamente de la URL del pedacito de video
-  const originMatch = url.match(/^(https?:\/\/[^\/]+)/i);
-  const originUrl = originMatch ? originMatch[1] : "";
-
-  // Inyectamos la firma de seguridad en cada fragmento (.ts / .m3u8 interno)
+  // Kino nos pasa en 'data' todo el objeto que devolvimos en resolve().
+  // Simplemente reciclamos esas mismas cabeceras perfectas para cada pedacito de video.
   return {
-    headers: {
-      "User-Agent": UA, // Forzamos a que siempre parezca una computadora
-      "Origin": originUrl,
-      "Referer": originUrl + "/",
-      "Accept": "*/*"
-    }
+    headers: data ? data.headers : {}
   };
 }
