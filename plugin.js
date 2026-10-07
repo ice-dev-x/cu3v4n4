@@ -342,19 +342,56 @@ export async function search(query) {
 }
 
 export async function episodes(ref) {
-  const res = await kino.fetch(ref, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!res.ok) throw new Error("No se pudo obtener la serie");
+  const res = await kino.fetch(ref, { headers: { "User-Agent": UA } });
+  if (!res.ok) throw new Error("No se pudo obtener el contenido");
   const html = await res.text();
 
-  const descMatch = html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
-  const overview = descMatch ? cleanText(descMatch[1]) : "";
-  const tmdbId = extractTmdbId(ref);
+  const metadata = {};
 
+  // Sinopsis (Overview)
+  const descMatch = html.match(/class="Description"[^>]*>([\s\S]*?)<\/div>/i) || html.match(/<p[^>]*>\s*([^<]{30,})\s*<\/p>/i);
+  if (descMatch) metadata.overview = cleanText(descMatch[1]);
+
+  // Calificación (Rating)
+  const voteMatch = html.match(/<span[^>]+class="Num"[^>]*>([\d.]+)<\/span>/i) || html.match(/class="Vote"[^>]*>\s*([\d.]+)\s*</i) || html.match(/class="AAIco-star"[^>]*>.*?<\/i>\s*([\d.]+)/i);
+  if (voteMatch) metadata.rating = parseFloat(voteMatch[1]);
+
+  // Géneros (Genres)
+  const gRegex = /<a[^>]+href="[^"]*genero[^"]*"[^>]*>\s*([^<]+)\s*<\/a>/gi;
+  let gm;
+  const genres = [];
+  while ((gm = gRegex.exec(html)) !== null) {
+    genres.push(cleanText(gm[1]));
+  }
+  if (genres.length > 0) metadata.genres = [...new Set(genres)]; 
+
+  // Año (Year)
+  const yearMatch = html.match(/class="Date"[^>]*>\s*(\d{4})\s*</i) || html.match(/>(19\d{2}|20\d{2})<\/(?:span|p)>/i);
+  if (yearMatch) metadata.year = parseInt(yearMatch[1], 10);
+
+  // Fondo / Póster (Backdrop)
+  const bgMatch = html.match(/<meta\s+(?:property|name)="og:image"\s+content="([^"]+)"/i) ||
+                  html.match(/background-image:\s*url\((['"]?)([^)'"d]+)\1\)/i) ||
+                  html.match(/<img[^>]+class="[^"]*lazy[^"]*"[^>]+data-src="([^"]+)"/i);
+  
+  if (bgMatch) {
+    let bUrl = bgMatch[1] || bgMatch[2];
+    if (bUrl && !bUrl.startsWith('data:')) {
+        if (bUrl.startsWith('//')) bUrl = 'https:' + bUrl;
+        else if (bUrl.startsWith('/')) bUrl = BASE_URL + bUrl;
+        metadata.backdrop = bUrl;
+    }
+  }
+
+  // Intento de capturar TMDB ID
+  const tmdbIdMatch = html.match(/tmdb[=&](\d+)/i) || html.match(/data-id="(\d{3,})"/i);
+  if (tmdbIdMatch) metadata.ids = { tmdb: parseInt(tmdbIdMatch[1], 10) };
+
+  // Extraer episodios
   const seasonRegex = /<a[^>]+href="([^"]+\/temporada-\d+)"/gi;
   const seasonLinks = [];
   let sMatch;
   while ((sMatch = seasonRegex.exec(html)) !== null) {
-
     let sLink = sMatch[1];
     if (!sLink.startsWith("http")) sLink = BASE_URL + sLink;
     if (!seasonLinks.includes(sLink)) seasonLinks.push(sLink);
@@ -372,76 +409,43 @@ export async function episodes(ref) {
       const epRegex = /<a[^>]+href="([^"]+\/episodio-\d+x\d+)"[^>]*>([\s\S]*?)<\/a>/gi;
       let epMatch;
       while ((epMatch = epRegex.exec(sHtml)) !== null) {
-        
-        //if (episodesList.length === 0) throw new Error(epMatch[2].substring(0, 500)); // DEBUG
-        
         let epRef = epMatch[1];
         if (!epRef.startsWith("http")) epRef = BASE_URL + epRef;
         if (vistos.has(epRef)) continue;
         vistos.add(epRef);
+        
         let season = 1, number = 1;
         const numMatch = epRef.match(/episodio-(\d+)x(\d+)/i);
         if (numMatch) {
           season = parseInt(numMatch[1], 10);
           number = parseInt(numMatch[2], 10);
         }
+        
         const titleMatch = epMatch[2].match(/<span[^>]*>([^<]+)<\/span>/i) || epMatch[2].match(/alt="([^"]+)"/i);
-       const imgMatch = epMatch[2].match(/src=(?:"([^"]+)"|([^ >]+))/i);
-let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
-if (still && still.startsWith("//")) still = "https:" + still;
-const epObj = { season, number, ref: epRef, title: `Episodio ${number}` };
-if (still) epObj.still = still;
-episodesList.push(epObj);
+        const imgMatch = epMatch[2].match(/src=(?:"([^"]+)"|([^ >]+))/i);
+        
+        let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
+        if (still && still.startsWith("//")) still = "https:" + still;
+        
+        const epObj = { season, number, ref: epRef, title: titleMatch ? cleanText(titleMatch[1] || titleMatch[2]) : `Episodio ${number}` };
+        if (still) epObj.still = still;
+        episodesList.push(epObj);
       }
     }
   }
 
   if (episodesList.length === 0) {
-    let count = 1;
-    const urlsVistas = new Set();
-    let foundServers = false;
-    const containerRegex = /class="tab-video-item">([\s\S]*?)<div[^>]*class="tab-item-name"[^>]*>\s*([^<\n]+)[\s\S]*?<ul>([\s\S]*?)<\/ul>/gi;
-    let cMatch;
-    while ((cMatch = containerRegex.exec(html)) !== null) {
-      const langName = cleanText(cMatch[2]);
-      const serversHtml = cMatch[3];
-      const serverRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
-      let serverMatch;
-      while ((serverMatch = serverRegex.exec(serversHtml)) !== null) {
-        const serverUrl = serverMatch[1];
-        if (urlsVistas.has(serverUrl)) continue;
-        urlsVistas.add(serverUrl);
-        foundServers = true;
-        const rawInner = serverMatch[2];
-        const nameMatch = rawInner.match(/<span[^>]*>([^<]+)<\/span>/i);
-        let serverName = nameMatch ? cleanText(nameMatch[1]) : `Servidor ${count}`;
-        if (!serverName || serverName.length < 2) serverName = `Servidor ${count}`;
-        episodesList.push({ season: 1, number: count, ref: `${ref}|||${serverUrl}`, title: `${langName} - ${serverName}` });
-        count++;
-      }
-    }
-    if (!foundServers) {
-      const fallbackRegex = /<li[^>]*data-server="([^"]+)"[^>]*>([\s\S]*?)<\/li>/gi;
-      let fMatch;
-      while ((fMatch = fallbackRegex.exec(html)) !== null) {
-        const serverUrl = fMatch[1];
-        if (urlsVistas.has(serverUrl)) continue;
-        urlsVistas.add(serverUrl);
-        episodesList.push({ season: 1, number: count, ref: `${ref}|||${serverUrl}`, title: `Opción ${count}` });
-        count++;
-      }
-    }
-    if (episodesList.length === 0) {
-      episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
-    }
+    episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
   }
 
   episodesList.sort((a, b) => (a.season - b.season) || (a.number - b.number));
+  
   const result = { episodes: episodesList };
-  const seriesInfo = {};
-  if (overview) seriesInfo.overview = overview;
-  if (tmdbId) seriesInfo.ids = { tmdb: tmdbId };
-  if (Object.keys(seriesInfo).length > 0) result.series = seriesInfo;
+  
+  if (Object.keys(metadata).length > 0) {
+    result.series = metadata;
+  }
+  
   return result;
 }
 
