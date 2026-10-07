@@ -1,7 +1,7 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.9.4",
+  "version": "2.9.5",
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
@@ -40,7 +40,7 @@
     "key": "servidor_pref",
     "label": "Servidor preferido",
     "type": "select",
-    "default": "1",
+    "default": "3",
     "options": [
       { "value": "1", "label": "Hyper" },
       { "value": "3", "label": "Nebula" },
