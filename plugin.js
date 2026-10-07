@@ -623,11 +623,12 @@ export async function resolve(ref) {
           return {
             label: finalLabel,
             url: streamUrl,
+            signing: "request",
             headers: {
               "Referer": iframeUrl,
               "Origin": originUrl,
-              //"User-Agent": UA, // Aplicamos el UA al reproductor final
-             // "Accept": "*/*"
+              "User-Agent": UA, // Aplicamos el UA al reproductor final
+              "Accept": "*/*"
             }
           };
         }
@@ -671,4 +672,19 @@ export async function resolve(ref) {
     if (e && e.code) throw e;
     throw kino.error("unavailable", String(e), { userMessage: "Hubo un problema cargando este contenido. Intenta de nuevo más tarde." });
   }
+}
+export async function sign(url, data, ref, action) {
+  // Extraemos el origen directamente de la URL del pedacito de video
+  const originMatch = url.match(/^(https?:\/\/[^\/]+)/i);
+  const originUrl = originMatch ? originMatch[1] : "";
+
+  // Inyectamos la firma de seguridad en cada fragmento (.ts / .m3u8 interno)
+  return {
+    headers: {
+      "User-Agent": UA, // Forzamos a que siempre parezca una computadora
+      "Origin": originUrl,
+      "Referer": originUrl + "/",
+      "Accept": "*/*"
+    }
+  };
 }
