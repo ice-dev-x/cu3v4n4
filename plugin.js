@@ -383,7 +383,7 @@ export async function episodes(ref) {
     }
   }
 
-  // Intento de capturar TMDB ID
+  // Intento de capturar TMDB ID para que Kino baje los nombres de los episodios
   const tmdbIdMatch = html.match(/tmdb[=&](\d+)/i) || html.match(/data-id="(\d{3,})"/i);
   if (tmdbIdMatch) metadata.ids = { tmdb: parseInt(tmdbIdMatch[1], 10) };
 
@@ -427,13 +427,23 @@ export async function episodes(ref) {
         let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
         if (still && still.startsWith("//")) still = "https:" + still;
         
-        const epObj = { season, number, ref: epRef, title: titleMatch ? cleanText(titleMatch[1] || titleMatch[2]) : `Episodio ${number}` };
+        // Formateo inteligente del título
+        let rawTitle = titleMatch ? cleanText(titleMatch[1] || titleMatch[2]) : "";
+        let epTitle = `Episodio ${number}`;
+        
+        // Si Cuevana tiene un título real (que no sea solo un número como "1"), lo usamos
+        if (rawTitle && isNaN(rawTitle) && !rawTitle.toLowerCase().includes("episodio")) {
+          epTitle = rawTitle;
+        }
+        
+        const epObj = { season, number, ref: epRef, title: epTitle };
         if (still) epObj.still = still;
         episodesList.push(epObj);
       }
     }
   }
 
+  // Si no hay episodios, es una película
   if (episodesList.length === 0) {
     episodesList.push({ season: 1, number: 1, ref: ref, title: "Reproducir Película" });
   }
@@ -442,12 +452,18 @@ export async function episodes(ref) {
   
   const result = { episodes: episodesList };
   
+  // Entregar la metadata en la caja correcta según si es peli o serie
   if (Object.keys(metadata).length > 0) {
-    result.series = metadata;
+    if (ref.includes("/serie/")) {
+      result.series = metadata;
+    } else {
+      result.movie = metadata;
+    }
   }
   
   return result;
 }
+
 
 export async function resolve(ref) {
   await null;
