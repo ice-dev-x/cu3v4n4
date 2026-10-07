@@ -40,7 +40,7 @@
     "key": "servidor_pref",
     "label": "Servidor preferido",
     "type": "select",
-    "default": "",
+    "default": "1",
     "options": [
       { "value": "1", "label": "Hyper" },
       { "value": "3", "label": "Nebula" },
