@@ -365,8 +365,11 @@ export async function episodes(ref) {
   }
   if (genres.length > 0) metadata.genres = [...new Set(genres)]; 
 
-  // Año (Year)
-  const yearMatch = html.match(/class="Date"[^>]*>\s*(\d{4})\s*</i) || html.match(/>(19\d{2}|20\d{2})<\/(?:span|p)>/i);
+  // Año (Year) - Radar ampliado para que no se escape en las series
+  const yearMatch = html.match(/class="Date"[^>]*>\s*(\d{4})\s*</i) || 
+                    html.match(/>(19\d{2}|20\d{2})<\/(?:span|p|a)>/i) || 
+                    html.match(/Estreno:\s*(\d{4})/i) ||
+                    html.match(/<span class="Year">(\d{4})<\/span>/i);
   if (yearMatch) metadata.year = parseInt(yearMatch[1], 10);
 
   // Fondo / Póster (Backdrop)
@@ -383,8 +386,10 @@ export async function episodes(ref) {
     }
   }
 
-  // Intento de capturar TMDB ID para que Kino baje los nombres de los episodios
-  const tmdbIdMatch = html.match(/tmdb[=&](\d+)/i) || html.match(/data-id="(\d{3,})"/i);
+  // Intento más agresivo de capturar TMDB ID para forzar a Kino a traer los nombres de episodios
+  const tmdbIdMatch = html.match(/tmdb[=&_]*(\d{3,})/i) || 
+                      html.match(/data-id="(\d{3,})"/i) || 
+                      html.match(/"tmdb_id"\s*:\s*"?(\d+)"?/i);
   if (tmdbIdMatch) metadata.ids = { tmdb: parseInt(tmdbIdMatch[1], 10) };
 
   // Extraer episodios
@@ -427,11 +432,10 @@ export async function episodes(ref) {
         let still = imgMatch ? (imgMatch[1] || imgMatch[2]) : null;
         if (still && still.startsWith("//")) still = "https:" + still;
         
-        // Formateo inteligente del título
         let rawTitle = titleMatch ? cleanText(titleMatch[1] || titleMatch[2]) : "";
         let epTitle = `Episodio ${number}`;
         
-        // Si Cuevana tiene un título real (que no sea solo un número como "1"), lo usamos
+        // Usamos el título que venga, si es que Cuevana en algún momento decide ponerlos
         if (rawTitle && isNaN(rawTitle) && !rawTitle.toLowerCase().includes("episodio")) {
           epTitle = rawTitle;
         }
@@ -452,13 +456,9 @@ export async function episodes(ref) {
   
   const result = { episodes: episodesList };
   
-  // Entregar la metadata en la caja correcta según si es peli o serie
+  // SOLUCIÓN: Empaquetar TODO en "series" como lo exige la app
   if (Object.keys(metadata).length > 0) {
-    if (ref.includes("/serie/")) {
-      result.series = metadata;
-    } else {
-      result.movie = metadata;
-    }
+    result.series = metadata;
   }
   
   return result;
