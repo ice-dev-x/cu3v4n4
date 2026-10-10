@@ -1,7 +1,7 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.9.5",
+  "version": "2.9.7",
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
@@ -42,10 +42,12 @@
     "type": "select",
     "default": "3",
     "options": [
-      { "value": "1", "label": "Hyper" },
-      { "value": "3", "label": "Nebula" },
-      { "value": "cualquiera", "label": "Automático" }
-    ]
+        { "value": "3", "label": "Nebula (Recomendado)" },
+        { "value": "1", "label": "Hyper" },
+        { "value": "2", "label": "Filemoon" },
+        { "value": "4", "label": "Doodstream" },
+        { "value": "cualquiera", "label": "Automático" }
+      ]
   }
 ],
   "color": "#074a6e",
