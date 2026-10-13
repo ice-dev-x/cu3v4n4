@@ -1,7 +1,7 @@
 {
   "id": "cuevana-3",
   "name": "Cuevana",
-  "version": "2.9.9",
+  "version": "3.0.0",
   "apiVersion": 6,
   "section": { "label": "CUEVANA" },
   "entry": "plugin.js",
@@ -9,8 +9,8 @@
   "author": "sadmachine",
   "streamHosts": "any",
   "hosts": [
-    "cuevana3r.pro",
-    "*.cuevana3r.pro",
+    "cuevana3k.pro",
+    "*.cuevana3k.pro",
     "filemoon.sx",
     "*.filemoon.sx",
     "lkhjerbhye3wjkhodvh5xiczuvd.lol",
